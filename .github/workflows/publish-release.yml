@@ -1,0 +1,74 @@
+# =============================================================================
+#  把某次构建的 artifact 发布到 GitHub Release（提供免登录直链）
+#
+#  触发: 仅 workflow_dispatch（手动 / 由 API 触发），不会随 push 自动跑
+#  用法: Actions → Publish firmware to Release → Run workflow
+#        run_id   : 来源构建的 run id（如 42186516665）
+#        artifact : 该 run 上传的 artifact 名称（如 immortalwrt-g68-plus-6）
+#        tag      : 目标 Release tag（不存在会自动创建）
+#
+#  产物: https://github.com/<owner>/<repo>/releases/download/<tag>/<file>.img.gz
+#        下载无需登录、不随 artifact 过期（默认保留到 Release 被删）
+# =============================================================================
+name: Publish firmware to Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "来源 run id"
+        required: true
+      artifact:
+        description: "artifact 名称"
+        required: true
+      tag:
+        description: "Release tag (不存在则创建)"
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    name: 发布固件到 Release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: 下载构建产物 (GitHub 内网)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh run download "${{ inputs.run_id }}" \
+            --repo "${{ github.repository }}" \
+            -n "${{ inputs.artifact }}" -D out
+          echo "---- 产物内容 ----"
+          find out -type f -printf '%10s  %p\n'
+
+      - name: 解出固件与校验文件
+        run: |
+          set -euo pipefail
+          find out -name '*.img.gz' -exec cp -v {} ./ \;
+          if [ -f out/sha256sums ]; then cp -v out/sha256sums ./sha256sums; fi
+          ls -lh ./*.img.gz ./sha256sums
+          sha256sum ./*.img.gz
+
+      - name: 上传到 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release 已存在, 直接上传资产"
+          else
+            gh release create "${{ inputs.tag }}" \
+              --repo "${{ github.repository }}" \
+              --title "ImmortalWrt G68-PLUS · ${{ inputs.tag }}" \
+              --notes "由构建 ${{ inputs.run_id }} 发布的固件"
+          fi
+          gh release upload "${{ inputs.tag }}" ./*.img.gz ./sha256sums \
+            --clobber --repo "${{ github.repository }}"
+          echo "---- Release 资产 ----"
+          gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}"
