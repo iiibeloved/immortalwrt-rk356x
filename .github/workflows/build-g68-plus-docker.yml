@@ -275,6 +275,67 @@ jobs:
             echo "::warning::有 ${bad} 个源码包下载失败, 编译阶段可能报错 (见 download.log)"
           fi
 
+      - name: 修复 rust 源码包 (vendor 校验兜底)
+        run: |
+          set -euo pipefail
+          T=$(ls dl/rustc-*-src.tar.xz 2>/dev/null | head -1 || true)
+          if [ -z "${T:-}" ]; then
+            echo "::warning::dl/ 下没有 rustc 源码包, 跳过兜底步骤"
+            exit 0
+          fi
+          echo "rust 源码包: $T ($(du -h "$T" | cut -f1))"
+          WORK=$(mktemp -d)
+          tar -xf "$T" -C "$WORK"
+          python3 - "$WORK" <<'PY'
+          import glob, json, os, sys
+          root = sys.argv[1]
+          crates = fixed = 0
+          samples = []
+          for cs in sorted(glob.glob(os.path.join(root, '**', '.cargo-checksum.json'), recursive=True)):
+              crates += 1
+              d = os.path.dirname(cs)
+              try:
+                  data = json.load(open(cs))
+              except Exception:
+                  continue
+              files = data.get('files') or {}
+              missing = [f for f in files if not os.path.exists(os.path.join(d, f))]
+              if not missing:
+                  continue
+              fixed += len(missing)
+              for f in missing:
+                  files.pop(f, None)
+              data['files'] = files
+              with open(cs, 'w') as fh:
+                  json.dump(data, fh, separators=(',', ':'))
+              if len(samples) < 8:
+                  samples.append(os.path.basename(d) + ' -> ' + ', '.join(missing[:3]))
+          print('vendor 包数: %d, 修正缺失条目: %d' % (crates, fixed))
+          for s in samples:
+              print('  -', s)
+          with open(os.path.join(root, '.fixed_count'), 'w') as fh:
+              fh.write(str(fixed))
+          PY
+          if [ "$(cat "$WORK/.fixed_count" 2>/dev/null || echo 0)" = "0" ]; then
+            echo "vendor 校验无缺失条目, 保持原包不动"
+            rm -rf "$WORK"
+            exit 0
+          fi
+          TOP=$(ls "$WORK" | grep -v '^\.fixed_count$')
+          NAME=$(basename "$T")
+          ( cd "$WORK" && XZ_OPT='-T0' tar -cJf "/tmp/$NAME" "$TOP" )
+          mv -f "/tmp/$NAME" "$T"
+          NEW=$(sha256sum "$T" | cut -d' ' -f1)
+          sed -i "s|^PKG_HASH:=.*|PKG_HASH:=$NEW|" feeds/packages/lang/rust/Makefile
+          echo "重打包完成, 更新 PKG_HASH: $NEW"
+          rm -rf "$WORK"
+
+      - name: 预编译 rust host (提前暴露 rust 问题)
+        run: |
+          set -o pipefail
+          make -j2 package/feeds/packages/rust/host/compile 2>&1 | tee rust-host.log
+          echo "rust host 预编译通过"
+
       - name: 编译固件
         run: |
           set -o pipefail
@@ -329,5 +390,6 @@ jobs:
           path: |
             build.log
             download.log
+            rust-host.log
           retention-days: 7
           if-no-files-found: ignore
