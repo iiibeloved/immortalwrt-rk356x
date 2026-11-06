@@ -229,16 +229,23 @@ CONFIG_PACKAGE_luci-app-xxx=y                  # 加包
 - 需要第三方源的包，要在 workflow 第 8 步的 `PKGS` 列表里加名字，否则构建时找不到包。
 - 改完 push（只改这个文件会触发构建）。
 
-### 7.2 恢复 shadowsocks-rust（会多花约 2 小时）
+### 7.2 关闭 / 恢复 shadowsocks-rust（影响约 2 小时）
 
-当前 `defconfig/g68-plus-istoreos.config` 里有这两行，删掉即可恢复：
+**当前状态：保持启用**（由基础 defconfig 的 `CONFIG_PACKAGE_shadowsocks-rust-sslocal/ssserver=y` 选中），
+固件带 ss 客户端/服务端；代价是要编 `lang/rust`（rustc + LLVM），构建约 **4 小时 15 分**。
+
+**要关闭**：在 `defconfig/g68-plus-istoreos.config` 里加两行
 
 ```ini
 # CONFIG_PACKAGE_shadowsocks-rust-sslocal is not set
 # CONFIG_PACKAGE_shadowsocks-rust-ssserver is not set
 ```
 
-删除后第 16 步会自动生效（不再跳过），走「工具链 → 修 rust vendor → 编 rust」流程。
+workflow 的「强制关闭 pass」会用 `sed` 把 `.config` 里的 `=y` 改写成 `is not set` 并重跑一次
+`make defconfig`（实测 kconfig 单独靠追加行会被翻回 `=y`）。之后第 17 步会检测到「config 里没有 rust 组件」
+自动跳过，构建降到约 **2.5 小时**。
+
+**要恢复**：删掉这两行即可。
 
 ### 7.3 手动补发 Release（历史构建）
 

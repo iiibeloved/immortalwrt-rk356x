@@ -11,11 +11,11 @@
 
 | 项目 | 值 |
 | --- | --- |
-| **下次自动构建** | **2026-11-09 02:00（周一，北京时间）** · cron `0 18 * * 0`（UTC 周日 18:00） |
+| **下次自动构建** | **2026-11-09 02:00（周一，北京时间）** · cron `0 18 * * 0`（UTC 周日 18:00）· 约 4 小时（含 ss-rust） |
 | 想立即构建 | Actions → `Build G68-PLUS (iStoreOS style)` → **Run workflow**（≈ 2.5 小时） |
-| 最近一次成功构建 | [run #42186516665](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42186516665) · commit `c6b3a90d` · 4 小时 09 分 |
-| 最近一次发布 | [g68-plus-2026.11.06](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.06)（含 shadowsocks-rust，167 MB） |
-| 当前仓库配置 | 已关闭 `shadowsocks-rust`（省约 2 小时）· **`rootfs` 200 MiB（与 fork 一致）+ `rootfs_data` 4096 MiB** · 22 个 iStoreOS 风格包 + samba4 + docker 引擎 |
+| 最近一次成功构建 | [run #42270932303](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42270932303)（2026-11-07 02:28 → 05:05，157 分钟） |
+| 最近一次发布 | [g68-plus-2026.11.07](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.07)（165.4 MB，分区 16/200/4096） |
+| 当前仓库配置 | **保留 `shadowsocks-rust`**（构建约 4 小时）· **`rootfs` 200 MiB（与 fork 一致）+ `rootfs_data` 4096 MiB** · 22 个 iStoreOS 风格包 + samba4 + docker 引擎 |
 | 下次构建预期 | ≈ 2.5 小时；成功后自动发布 `g68-plus-2026.11.09` Release（免登录直链） |
 | 构建失败 | 自动开 Issue：标题 `CI 构建失败: … #<run>`，正文含失败步骤、run 链接与排查指引；同类未关闭则追加评论 |
 | 详细步骤 | [docs/build-guide.md](docs/build-guide.md)（触发方式 / 22 步流程 / 失败速查表 / 12 条注意事项） |
@@ -93,7 +93,7 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 | `upload_artifacts` | `true` | 上传 artifact（15 天） |
 | `publish_release` | `true` | 成功后自动发布 Release |
 
-耗时参考：**约 2.5 小时**（rust 步骤已按配置自动跳过）；保留 `shadowsocks-rust` 时约 4.2 小时。
+耗时参考：**约 4 小时 15 分**（含 `shadowsocks-rust` → 需编 rustc/LLVM，约 2 小时）；若在附加配置里关掉 ss-rust，可降到约 2.5 小时。
 
 ---
 
@@ -104,7 +104,7 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 - **文件管理**：`luci-app-filemanager`、`luci-app-filetransfer`
 - **Samba4**：`samba4-server` + `luci-app-samba4`
 - **Docker**：`dockerd` / `containerd` / `runc` / `docker`（原 defconfig 只有 dockerman 界面，已补齐引擎）
-- **按需关闭**：`shadowsocks-rust-sslocal/ssserver`（默认关闭，可省约 2 小时构建时间）
+- **代理组件**：`shadowsocks-rust-sslocal/ssserver`（默认启用；不想要可在附加配置里关闭，省约 2 小时）
 
 第三方源：`kenzok8/small-package`（只按名安装需要的包，避免与官方源同名冲突）、`DustReliant/luci-app-filetransfer`（本地单包引入）。
 

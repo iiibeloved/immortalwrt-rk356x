@@ -181,7 +181,7 @@ d4a1908a71dc8b7977eb626b07b0f291b575cc35b3958757b58aaec56eeba41d
 
 ### 维护建议
 
-- **rust 已默认关闭**：`shadowsocks-rust-sslocal/ssserver` 在附加配置里被显式设为 `is not set`，
+- **rust 默认启用**（ss-rust 保留）：`shadowsocks-rust-sslocal/ssserver` 由基础 defconfig 选中，
   workflow 的 rust 步骤会检测到「config 里没有 rust 组件」后自动跳过（省 ~2 小时，构建约 2.5 小时）。
   需要 ss 客户端/服务端时，删掉 `defconfig/g68-plus-istoreos.config` 里的这两行：
 
