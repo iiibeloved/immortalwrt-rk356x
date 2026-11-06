@@ -26,6 +26,8 @@ name: Build G68-PLUS (iStoreOS style)
 
 permissions:
   contents: write      # 构建成功后自动发布 Release 需要
+  issues: write        # 构建失败时自动开 issue
+  actions: read        # 读取本次 run 的失败步骤
 
 on:
   workflow_dispatch:
@@ -459,6 +461,49 @@ jobs:
             "$IMG" "$T/sha256sums"
           echo "---- Release 资产 ----"
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY"
+
+      - name: 构建失败时自动开 issue
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          TITLE="CI 构建失败: ${GITHUB_WORKFLOW} #${GITHUB_RUN_NUMBER}"
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          FAILED=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" \
+            --jq '[.jobs[].steps[] | select(.conclusion=="failure") | .name] | join(", ")' 2>/dev/null || echo "未知")
+          BODY=$(cat <<EOF
+          ## 构建失败
+
+          | 项目 | 值 |
+          | --- | --- |
+          | 运行 | [#${GITHUB_RUN_NUMBER}](${RUN_URL}) |
+          | 提交 | \`${GITHUB_SHA:0:8}\` |
+          | 触发方式 | ${GITHUB_EVENT_NAME} |
+          | 失败步骤 | ${FAILED} |
+
+          ### 排查步骤
+
+          1. 打开 [运行日志](${RUN_URL})，展开失败的那一步；
+          2. 在该 run 页面底部下载 \`build-log-${GITHUB_RUN_NUMBER}\` artifact，
+             内含 \`build.log\` / \`download.log\` / \`rust-host.log\` / \`toolchain.log\`；
+          3. 对照 [失败排查速查表](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/docs/build-guide.md#6-失败排查速查表)；
+          4. 修复后手动 Run workflow 验证，本 issue 可关闭。
+
+          > 该 issue 由 CI 自动创建；若已有同类未关闭 issue，则改为在其下追加评论。
+          EOF
+          )
+          EXISTING=$(gh api "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" \
+            --jq '[.[] | select(.title | startswith("CI 构建失败")) | .number] | first // empty' 2>/dev/null || true)
+          if [ -n "${EXISTING:-}" ]; then
+            echo "已有未关闭的失败 issue #${EXISTING}, 追加评论"
+            gh issue comment "${EXISTING}" --repo "$GITHUB_REPOSITORY" --body "$BODY" \
+              || echo "::warning::追加评论失败"
+          else
+            echo "创建新的失败 issue"
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY" \
+              || echo "::warning::创建 issue 失败 (仓库未开启 Issues?)"
+          fi
 
       - name: 上传编译日志 (仅失败时)
         if: failure()

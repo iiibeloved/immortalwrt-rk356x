@@ -128,6 +128,18 @@ gh run list --repo iiibeloved/immortalwrt-rk356x --limit 3
 > 提示：**构建中的 run 无法通过 API 下载完整日志**（GitHub 要等 job 结束才生成日志 blob）。
 > 想实时看进度只能在网页里展开步骤看滚动日志。
 
+### 3.1 构建失败会自动开 issue（含定时构建）
+
+workflow 最后有一步「构建失败时自动开 issue」（`if: failure()`），用的是内置 `GITHUB_TOKEN`
+（workflow 顶部已声明 `issues: write` + `actions: read`），不需要额外 secret：
+
+- 仓库 **Issues 页**会出现标题形如 `CI 构建失败: Build G68-PLUS (iStoreOS style) #58` 的 issue；
+- 正文自动包含：本次 run 链接、commit、触发方式（schedule / workflow_dispatch / push）、**失败的具体步骤名**、
+  以及 4 步排查指引（含 `build-log-<n>` artifact 说明和本文第 6 节的链接）；
+- **去重策略**：若已存在未关闭的同类 issue，则不新建，改为在该 issue 下追加评论（每次失败一条）；
+- 想恢复「每次失败都新建」：把 issue 关掉即可（关闭后下次失败会新开一条）；
+- 想彻底关掉通知：删掉 workflow 里名为「构建失败时自动开 issue」的那一步。
+
 ---
 
 ## 4. 产物与下载

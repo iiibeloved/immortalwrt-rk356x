@@ -125,5 +125,6 @@ ls bin/targets/rockchip/armv8/
 2. 改 `docs/` 或 workflow 不会触发构建；只有改 `defconfig/` 下两个文件才会。
 3. cron 是 UTC：`0 18 * * 0` 对应**周一 02:00（北京时间）**。
 4. 仓库 60 天无提交活动，GitHub 会停用定时任务，需在 Actions 页面手动 Enable。
-5. 附加插件多为社区维护，刷机后建议逐项验证（quickstart / iStore / 共享 / Docker）。
-6. 第三方 feed 跟随上游 `master`，需要完全可复现构建时应锁定 commit。
+5. 构建失败会**自动开 Issue**（含定时构建），正文带 run 链接、失败步骤与排查指引；同类未关闭 issue 存在时改为追加评论。
+6. 附加插件多为社区维护，刷机后建议逐项验证（quickstart / iStore / 共享 / Docker）。
+7. 第三方 feed 跟随上游 `master`，需要完全可复现构建时应锁定 commit。
