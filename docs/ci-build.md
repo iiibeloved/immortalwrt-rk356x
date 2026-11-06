@@ -45,11 +45,12 @@ defconfig/g68-plus-istoreos.config            # 附加配置片段（差异项�
 Actions run 页面底部 **Artifacts** → `immortalwrt-g68-plus-<run_number>.zip`，保留 15 天，内含：
 
 ```
-immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sdcard.img.gz      # SD/eMMC 直刷
-immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz  # 系统升级（dd 方式）
-immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.tar
+immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz  # 唯一镜像, dd 直刷 / 系统升级均用它
 immortalwrt-rockchip-armv8-nsy_g68-plus.manifest                    # 包清单
 sha256sums / config.buildinfo / config.applied                      # 校验与配置留档
+
+> 实测: 该设备(pine64-img 流程)只产出 `sysupgrade.img.gz`(约 175 MB 未压缩),
+> 没有单独的 sdcard.img.gz; 解压后用 dd / balenaEtcher 写入 eMMC 或 SD 卡即可。
 ```
 
 编译失败时额外上传 `build-log-<run_number>.zip`（`build.log`，含失败前的完整输出）。
@@ -147,3 +148,46 @@ git push origin main
 方式 B：GitHub 网页端 `Add file → Create new file`，路径填
 `.github/workflows/build-g68-plus-docker.yml`，粘贴内容后提交；同样方式添加
 `defconfig/g68-plus-istoreos.config`。提交后 Actions 会自动开始第一次编译。
+
+
+## 9. 实测记录：2026-11-06 首次成功构建
+
+| 项目 | 结果 |
+| --- | --- |
+| run | [#42186516665](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42186516665)，commit `c6b3a90d` |
+| 总耗时 | **4 小时 09 分**（16:17 → 20:26，Asia/Shanghai） |
+| 阶段耗时 | 准备 25 min · 下载 6 min · 工具链 34 min · rust 118 min · 世界构建 72 min |
+| artifact | `immortalwrt-g68-plus-6`，165.4 MB |
+| 固件 | 包 497 个，内核 `6.6.99`，`base-files 1~c6b3a90` |
+| 附加包校验 | **22/22 全部命中**（quickstart/store/unishare/lucky/wolplus/rtbwmon/filemanager/filetransfer/samba4/docker 全套） |
+
+`sysupgrade.img.gz` 的 sha256：
+
+```
+d4a1908a71dc8b7977eb626b07b0f291b575cc35b3958757b58aaec56eeba41d
+```
+
+### 踩过的两个坑（已在 workflow 内修掉）
+
+1. **`python3-pyelftools` 缺失** —— RK3568 的 u-boot 打 FIT 镜像需要它，`make` 在 prereq 阶段直接 exit 2。
+   现在 apt 列表已包含，并加了独立的 `make prereq` 门禁步骤（1–2 分钟暴露问题）。
+2. **`lang/rust` 宿主工具链 vendor 校验失败**（`Cargo.toml.orig` 找不到）—— 由基础 defconfig 里的
+   `shadowsocks-rust-sslocal/ssserver` 作为 `rust/host` 构建依赖拉起。
+   workflow 的做法：先 `make .../rust/host/compile` 触发解包（必然在 checksum 处快速失败），
+   然后扫描 `build_dir/*/host/rustc-*-src/vendor/*/.cargo-checksum.json`，
+   **把「登记了但文件确实不存在」的条目删掉**，再重编；同时提前编好 tools + toolchain，
+   否则 rust 的 sanity check 会因为找不到 `aarch64-openwrt-linux-musl-gcc` 而失败。
+
+### 维护建议
+
+- **rust 不享受 ccache**：`cargo` 编译不走 ccache，所以每次全新构建都会重编 rustc + LLVM，
+  稳定占用 ~2 小时。若不需要 `shadowsocks-rust`，在 `defconfig/g68-plus-istoreos.config` 追加：
+
+  ```
+  # CONFIG_PACKAGE_shadowsocks-rust-sslocal is not set
+  # CONFIG_PACKAGE_shadowsocks-rust-ssserver is not set
+  ```
+
+  构建时间可直接砍到 ~2 小时；其余 20 个 iStoreOS 相关包不受影响。
+- `dl/` 与 `.ccache/` 已被 `actions/cache` 缓存，二次构建的下载与 C 编译会明显加快。
+- 定时任务每周一 02:00 会自动重编，用于跟踪 feeds / 插件更新。
