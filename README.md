@@ -76,7 +76,7 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 | --- | --- | --- |
 | `defconfig` | `defconfig/g68-plus-docker.config` | 基础配置（换机型就改这个） |
 | `extra_config` | `defconfig/g68-plus-istoreos.config` | 附加差异项（iStoreOS 插件等） |
-| `rootfs_size` | `200` | 只读系统分区，与 fork 派生源的 `CONFIG_TARGET_ROOTFS_PARTSIZE=200` 保持一致；squashfs 约 150–180 MB（占用 75–90%，偏紧）。要更多余量可传 `256`/`512` |
+| `rootfs_size` | `200` | 只读系统分区，与 fork 源 `CONFIG_TARGET_ROOTFS_PARTSIZE=200` 一致。**实测 squashfs = 160.2 MiB**（xz，5824 inode），占 200 MiB 的 ~80%；去掉 ss-rust 后约 150 MiB（~75%）。要更多余量传 `256`（~60%） |
 | `rootfs_data_size` | `4096` | 可写 overlay：iStore/opkg 装的包、docker 数据、配置改动（脚本 `gen_image_generic.sh` 读取 `ROOTFS_DATA_PARTSIZE`） |
 
 > docker 数据目录：镜像内置 `/etc/init.d/docker-dataroot`，开机自动把 `dockerd.globals.data_root`

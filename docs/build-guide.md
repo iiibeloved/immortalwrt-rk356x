@@ -42,7 +42,7 @@
 | --- | --- | --- |
 | `defconfig` | `defconfig/g68-plus-docker.config` | 基础配置，改它等于换机型 |
 | `extra_config` | `defconfig/g68-plus-istoreos.config` | 附加差异项（iStoreOS 插件等） |
-| `rootfs_size` | `200` | 只读系统分区，与 fork 源 `CONFIG_TARGET_ROOTFS_PARTSIZE=200` 一致；squashfs 约 150–180 MB（75–90%，偏紧），需要余量传 `256`/`512` |
+| `rootfs_size` | `200` | 只读系统分区，与 fork 源 `CONFIG_TARGET_ROOTFS_PARTSIZE=200` 一致。**实测 squashfs=160.2 MiB**（xz，5824 inode）→ 占用 ~80%；去掉 ss-rust 后约 75%。需要余量传 `256` |
 | `rootfs_data_size` | `4096` | 可写 overlay：iStore/opkg 装包、docker 数据、配置改动（镜像脚本读 `ROOTFS_DATA_PARTSIZE`） |
 | `upload_artifacts` | `true` | 是否上传 artifact（15 天有效） |
 | `publish_release` | `true` | 成功后是否自动发 Release（生成免登录直链） |
@@ -258,11 +258,23 @@ tag      : g68-plus-2026.11.06      # 目标 tag；已存在则直接追加资�
 | 分区 | 大小 | 来源 | 用途 |
 | --- | --- | --- | --- |
 | kernel/boot | 16 MiB | `CONFIG_TARGET_KERNEL_PARTSIZE` | 内核 + dtb + boot.scr |
-| rootfs | `rootfs_size`（现 **200 MiB**，与 fork 一致） | `CONFIG_TARGET_ROOTFS_PARTSIZE`，被 workflow 覆盖 | **只读 squashfs**，497 个包都在这里；实际占用约 150–180 MiB |
+| rootfs | `rootfs_size`（现 **200 MiB**，与 fork 一致） | `CONFIG_TARGET_ROOTFS_PARTSIZE`，被 workflow 覆盖 | **只读 squashfs**，497 个包都在这里；**实测 160.2 MiB**（xz / 5824 inode / block 256 KiB） |
 | rootfs_data | `rootfs_data_size`（现 **4096 MiB**） | 镜像脚本 `gen_image_generic.sh` 读 `ROOTFS_DATA_PARTSIZE`（本仓库默认 4096） | 可写 overlay：配置改动、iStore/opkg 装的包、docker 数据 |
 
 当前配置整盘镜像约 **4.3 GiB**（16 + 200 + 4096 + 对齐空隙 32 MiB×2），`.img.gz` 约 165–180 MB；目标 eMMC/SD 卡 ≥5 GB。
 构建会在 Job Summary 输出 squashfs 实际占用率；≥85% 时自动 `::warning::` 提示调大 `rootfs_size`。
+
+**实测数据（2026-11-06 那版镜像，直接解析 squashfs 超级块）**：
+
+| 项目 | 值 |
+| --- | --- |
+| squashfs 文件系统 | squashfs 4.0，xz 压缩，block 256 KiB |
+| inode / 片段 | 5824 / 307 |
+| `bytes_used` | **167,949,051 字节 = 160.17 MiB** |
+| 放进 200 MiB 分区 | 占用 **80%**（余量 ~40 MiB） |
+| 放进 256 MiB 分区 | 占用 63%（余量 ~96 MiB） |
+
+该镜像含 `shadowsocks-rust`；下一版已关闭它，squashfs 会再小 5–10 MiB（约 150 MiB，占用 ~75%）。
 **docker / iStore 的可用空间由 `rootfs_data_size` 决定**（现 4096 MiB），与 `rootfs_size` 无关。
 
 ### 7.5 给 docker / iStore 扩容（rootfs_data 只有 2048 MiB）
