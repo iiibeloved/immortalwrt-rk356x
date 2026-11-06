@@ -1,0 +1,316 @@
+# =============================================================================
+#  ImmortalWrt · rockchip/armv8 · NSY G68-PLUS (RK3568) · iStoreOS 风格
+#
+#  仓库   : https://github.com/iiibeloved/immortalwrt-rk356x  (branch: main)
+#  目标   : rockchip / armv8 / DEVICE_nsy_g68-plus / aarch64_generic / Linux 6.6
+#  基础   : defconfig/g68-plus-docker.config
+#  附加   : defconfig/g68-plus-istoreos.config
+#           (quickstart + luci-app-store, unishare, wolplus, lucky, rtbwmon,
+#            filemanager, filetransfer, samba4, docker 引擎)
+#
+#  触发   : 1) Actions → Run workflow (可改 defconfig / 附加配置 / rootfs 大小)
+#           2) push 到 main, 且改动 defconfig/ 或本文件
+#           3) 每周一 02:00 (Asia/Shanghai) 定时重编, 跟踪 feeds 与插件更新
+#
+#  产物   : Actions run 页面底部 Artifacts
+#           immortalwrt-g68-plus-<run_number>.zip
+#             ├─ *-sdcard.img.gz        (SD / eMMC 直刷)
+#             ├─ *-sysupgrade.img.gz    (dd 刷写升级) / *-sysupgrade.tar
+#             ├─ *.manifest / sha256sums
+#             └─ config.applied         (实际生效的 .config)
+#
+#  备注   : 本树 scripts/feeds 读取 ./feeds.conf (缺失时回退 feeds.conf.default),
+#           故 CI 显式生成 feeds.conf; 同时导出 FEEDS_CONF 以兼容会读该变量的派生脚本。
+# =============================================================================
+name: Build G68-PLUS (iStoreOS style)
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      defconfig:
+        description: "基础 defconfig 路径"
+        required: true
+        default: defconfig/g68-plus-docker.config
+      extra_config:
+        description: "附加配置片段路径 (留空则只编译 defconfig)"
+        required: false
+        default: defconfig/g68-plus-istoreos.config
+      rootfs_size:
+        description: "rootfs 分区大小 (MB)"
+        required: true
+        default: "2048"
+      upload_artifacts:
+        description: "上传固件 artifact"
+        type: boolean
+        default: true
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/build-g68-plus-docker.yml"
+      - "defconfig/g68-plus-docker.config"
+      - "defconfig/g68-plus-istoreos.config"
+  schedule:
+    # 每周日 18:00 UTC = 每周一 02:00 Asia/Shanghai
+    - cron: "0 18 * * 0"
+
+concurrency:
+  group: build-g68-plus-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Shanghai
+  REPO_URL: https://github.com/iiibeloved/immortalwrt-rk356x
+  REPO_BRANCH: main
+
+  # feeds: 本树读 feeds.conf, 这里显式声明路径
+  FEEDS_CONF: feeds.conf
+  # kenzok8/small-package: 提供 quickstart / luci-app-store / unishare / lucky /
+  # wolplus / rtbwmon / webdav2 等 iStoreOS 生态插件
+  FEED_SMALL: "src-git small https://github.com/kenzok8/small-package.git;main"
+  # 单包仓库 (以本地 package/ 方式引入, 不作为 feed 全量索引)
+  PKG_FILETRANSFER_URL: https://github.com/DustReliant/luci-app-filetransfer.git
+
+  CONFIG_FILE: ${{ github.event.inputs.defconfig || 'defconfig/g68-plus-docker.config' }}
+  EXTRA_CONFIG: ${{ github.event.inputs.extra_config || 'defconfig/g68-plus-istoreos.config' }}
+  ROOTFS_SIZE: ${{ github.event.inputs.rootfs_size || '2048' }}
+  CCACHE_MAXSIZE: 2G
+
+jobs:
+  build:
+    name: rockchip/armv8 · nsy_g68-plus
+    runs-on: ubuntu-22.04
+    timeout-minutes: 350
+
+    steps:
+      # ---------------------------------------------------------------------
+      # 0. 环境准备
+      # ---------------------------------------------------------------------
+      - name: 释放磁盘空间
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost 2>/dev/null || true
+          sudo apt-get clean
+          df -h /
+
+      - name: 检出源码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: 校验配置并打印目标
+        run: |
+          set -euo pipefail
+          [ -f "$CONFIG_FILE" ] || { echo "::error::找不到基础 defconfig: $CONFIG_FILE"; exit 1; }
+          echo "== 基础配置: $CONFIG_FILE"
+          grep -E '^CONFIG_TARGET_(BOARD|SUBTARGET|PROFILE|ARCH_PACKAGES|KERNEL_PARTSIZE)=' "$CONFIG_FILE" || true
+          if [ -n "${EXTRA_CONFIG:-}" ] && [ -f "$EXTRA_CONFIG" ]; then
+            echo "== 附加配置: $EXTRA_CONFIG"
+            echo "   差异项: $(grep -cE '^CONFIG_[A-Z0-9_]+=' "$EXTRA_CONFIG" || true) 行"
+          else
+            echo "::warning::未找到附加配置, 仅编译基础 defconfig"
+            echo "EXTRA_CONFIG=" >> "$GITHUB_ENV"
+          fi
+
+      - name: 安装编译依赖
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+            gettext git libelf-dev libncurses-dev libssl-dev python3 rsync swig \
+            unzip zlib1g-dev file wget curl ca-certificates ccache time
+          # 版本自检
+          gcc --version | head -1
+          ccache --version | head -1
+          python3 --version
+
+      # ---------------------------------------------------------------------
+      # 1. feeds: 先装官方 4 源 (defconfig 里 400+ 包依赖它们)
+      # ---------------------------------------------------------------------
+      - name: 生成 feeds.conf (官方 4 源)
+        run: |
+          set -euo pipefail
+          cp feeds.conf.default feeds.conf
+          echo "---- feeds.conf ----"
+          cat feeds.conf
+
+      - name: 更新并安装官方 feeds
+        run: |
+          set -euo pipefail
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      # ---------------------------------------------------------------------
+      # 2. feeds: 再引入第三方源, 只安装需要的包
+      #    (kenzok8/small-package 内含 docker/dnsmasq/firewall4 等与官方同名
+      #     的包, 若 feeds install -a 会覆盖官方版本造成冲突, 故按名安装)
+      # ---------------------------------------------------------------------
+      - name: 引入第三方 feed 并选择性安装
+        run: |
+          set -euo pipefail
+          grep -q '^src-git small ' feeds.conf || echo "$FEED_SMALL" >> feeds.conf
+          echo "---- feeds.conf (final) ----"
+          cat feeds.conf
+
+          ./scripts/feeds update small
+
+          PKGS="quickstart luci-app-quickstart luci-app-store luci-lib-taskd luci-lib-xterm taskd \
+                unishare luci-app-unishare webdav2 luci-app-lucky lucky \
+                luci-app-wolplus luci-app-rtbwmon"
+          for p in $PKGS; do
+            if ./scripts/feeds install "$p"; then
+              :
+            else
+              echo "::warning::feeds install 失败: $p (该包可能被跳过)"
+            fi
+          done
+
+      - name: 引入 luci-app-filetransfer (本地单包)
+        run: |
+          set -u
+          if git clone --depth 1 "$PKG_FILETRANSFER_URL" package/luci-app-filetransfer; then
+            rm -rf package/luci-app-filetransfer/.git   # 只保留包内容, 避免嵌套 git 树
+            echo "== luci-app-filetransfer 已放入 package/"
+          else
+            echo "::warning::luci-app-filetransfer 拉取失败, 该包将被跳过"
+            rm -rf package/luci-app-filetransfer
+          fi
+
+      # ---------------------------------------------------------------------
+      # 3. 配置: defconfig + 附加片段 + rootfs 大小, 再由 make defconfig 归一化
+      # ---------------------------------------------------------------------
+      - name: 应用 defconfig 与附加配置
+        run: |
+          set -euo pipefail
+          cp "$CONFIG_FILE" .config
+
+          if [ -n "${EXTRA_CONFIG:-}" ] && [ -f "$EXTRA_CONFIG" ]; then
+            {
+              echo ""
+              echo "# ==== appended by .github/workflows/build-g68-plus-docker.yml ===="
+              cat "$EXTRA_CONFIG"
+            } >> .config
+          fi
+
+          # 命令行参数优先: 覆盖 rootfs 分区大小
+          sed -i -E '/^CONFIG_TARGET_ROOTFS_PARTSIZE=/d' .config
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=${ROOTFS_SIZE}" >> .config
+
+          # 归一化: 补齐依赖、丢弃不存在的符号 (未知符号在这里被静默移除)
+          make defconfig
+
+          echo "---- 生效目标 ----"
+          grep -E '^CONFIG_TARGET_(BOARD|SUBTARGET|PROFILE|ARCH_PACKAGES|ROOTFS_PARTSIZE)=' .config
+          echo "---- 已启用包数: $(grep -c '^CONFIG_PACKAGE_.*=y$' .config) ----"
+
+      - name: 校验附加包是否生效
+        run: |
+          set -uo pipefail
+          missing=""
+          {
+            echo "### 编译配置"
+            echo ""
+            echo '```'
+            grep -E '^CONFIG_TARGET_(BOARD|SUBTARGET|PROFILE|ARCH_PACKAGES|ROOTFS_PARTSIZE)=' .config || true
+            echo '```'
+            echo ""
+            echo "#### 附加软件包"
+            echo ""
+            echo "| 软件包 | 状态 |"
+            echo "| --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -n "${EXTRA_CONFIG:-}" ] && [ -f "$EXTRA_CONFIG" ]; then
+            for p in $(grep -oE '^CONFIG_PACKAGE_[A-Za-z0-9_.+-]+=y$' "$EXTRA_CONFIG" \
+                       | sed -e 's/^CONFIG_PACKAGE_//' -e 's/=y$//'); do
+              if grep -qx "CONFIG_PACKAGE_${p}=y" .config; then
+                echo "| \`${p}\` | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo "| \`${p}\` | ⚠️ 未启用 |" >> "$GITHUB_STEP_SUMMARY"
+                missing="${missing} ${p}"
+              fi
+            done
+          fi
+
+          if [ -n "$missing" ]; then
+            echo "::warning::以下附加包未能启用(依赖缺失/符号不存在):${missing}"
+          else
+            echo "全部附加包均已启用"
+          fi
+
+      # ---------------------------------------------------------------------
+      # 4. 源码下载与编译
+      # ---------------------------------------------------------------------
+      - name: 缓存 dl 与 ccache
+        uses: actions/cache@v4
+        with:
+          path: |
+            dl
+            .ccache
+          key: openwrt-g68plus-${{ hashFiles('defconfig/g68-plus-docker.config', 'defconfig/g68-plus-istoreos.config') }}-${{ github.run_id }}
+          restore-keys: |
+            openwrt-g68plus-
+
+      - name: 下载软件包源码
+        run: |
+          make download -j"$(nproc)" || true
+          make download -j1 V=s -k || true
+          du -sh dl 2>/dev/null || true
+
+      - name: 编译固件
+        run: |
+          set -o pipefail
+          if make -j"$(nproc)" 2>&1 | tee build.log; then
+            echo "== 编译完成"
+          else
+            echo "::warning::并行编译失败, 以单线程加详细日志重试一次"
+            make -j1 V=s 2>&1 | tee -a build.log
+          fi
+
+      # ---------------------------------------------------------------------
+      # 5. 产物收集与上传
+      # ---------------------------------------------------------------------
+      - name: 收集固件
+        if: always()
+        run: |
+          mkdir -p output
+          T=bin/targets/rockchip/armv8
+          if [ -d "$T" ]; then
+            find "$T" -maxdepth 1 -type f \( \
+                 -name '*.img.gz' -o -name '*.img' -o -name '*.tar.gz' \
+                 -o -name '*sysupgrade*' -o -name '*.itb' -o -name '*.fit' \
+                 -o -name '*.manifest' -o -name 'sha256sums' -o -name 'config.buildinfo' \
+              \) -exec cp -v {} output/ \;
+          fi
+          cp -v .config output/config.applied 2>/dev/null || true
+          echo "---- output ----"
+          ls -lh output/ || true
+          {
+            echo ""
+            echo "### 固件产物"
+            echo ""
+            echo '```'
+            ls -lh output/ 2>/dev/null || echo "(无产物, 编译可能失败)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传固件 artifact
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.upload_artifacts != false }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: immortalwrt-g68-plus-${{ github.run_number }}
+          path: output/*
+          retention-days: 15
+          if-no-files-found: warn
+
+      - name: 上传编译日志 (仅失败时)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_number }}
+          path: build.log
+          retention-days: 7
+          if-no-files-found: ignore

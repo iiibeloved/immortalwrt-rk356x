@@ -1,0 +1,149 @@
+# G68-PLUS · iStoreOS 风格固件 CI 构建说明
+
+针对仓库 <https://github.com/iiibeloved/immortalwrt-rk356x>（`main` 分支）的 GitHub Actions 编译方案。
+
+## 1. 仓库结构分析结论
+
+| 项目 | 结果 |
+| --- | --- |
+| 分支 / 提交 | `main`，活跃维护（最近 push `2026-11-06`） |
+| 基础 defconfig | `defconfig/g68-plus-docker.config` ✅ 存在（303 KB / 7906 行） |
+| 目标平台 | `rockchip` / `armv8` / `DEVICE_nsy_g68-plus`（NSY G68-PLUS，RK3568） |
+| 包架构 | `aarch64_generic`，内核 `CONFIG_LINUX_6_6=y` |
+| rootfs | squashfs（`CONFIG_TARGET_ROOTFS_SQUASHFS=y`），分区原为 200 MB |
+| 启动方式 | `BOOT_FLOW := pine64-img`（SD/eMMC 直刷镜像） |
+| 默认 feeds | 仅 4 个官方源（`packages` / `luci` / `routing` / `telephony`，分支 `openwrt-24.10`），**没有** iStoreOS 源 |
+| `.github/` | 不存在，需新建 |
+| `dl/` | 已随仓库提交，可被缓存复用 |
+
+原配置里已有 424 个包，包含 `luci-app-dockerman`、`luci-lib-docker`、`luci-compat`、`luci-app-ttyd`、
+`luci-theme-argon` 等，但**没有 docker 引擎本体**（`dockerd/containerd/runc/docker` 均未选中），
+与文件名 `g68-plus-docker` 的意图不符，已在附加配置中补齐。
+
+## 2. 需要放入仓库的文件
+
+```
+.github/workflows/build-g68-plus-docker.yml   # 工作流
+defconfig/g68-plus-istoreos.config            # 附加配置片段（差异项）
+```
+
+`defconfig/g68-plus-istoreos.config` 只写“差异项”，不改动原 defconfig；
+两者叠加后由 `make defconfig` 归一化（自动补依赖、丢弃不存在的符号）。
+
+## 3. 触发条件
+
+| 触发 | 说明 |
+| --- | --- |
+| `workflow_dispatch` | 手动运行，可覆盖 `defconfig` / `extra_config` / `rootfs_size` / 是否上传 artifact |
+| `push`（`main`） | 仅当改动工作流本身或 `defconfig/` 下两个文件时触发 |
+| `schedule` | `0 18 * * 0`（UTC）= 每周一 02:00（Asia/Shanghai），用于跟踪 feeds / 插件更新 |
+
+`concurrency` 已设置但 `cancel-in-progress: false`，避免一次 3 小时的编译被后续提交打断。
+
+## 4. 输出物位置
+
+Actions run 页面底部 **Artifacts** → `immortalwrt-g68-plus-<run_number>.zip`，保留 15 天，内含：
+
+```
+immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sdcard.img.gz      # SD/eMMC 直刷
+immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz  # 系统升级（dd 方式）
+immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.tar
+immortalwrt-rockchip-armv8-nsy_g68-plus.manifest                    # 包清单
+sha256sums / config.buildinfo / config.applied                      # 校验与配置留档
+```
+
+编译失败时额外上传 `build-log-<run_number>.zip`（`build.log`，含失败前的完整输出）。
+
+## 5. 工作流关键设计
+
+1. **feeds 分两步装**：先 `cp feeds.conf.default feeds.conf` → `feeds update -a` → `feeds install -a`，
+   确保官方 4 个源的包（defconfig 依赖 400+ 个）全部就位；**之后**再追加
+   `kenzok8/small-package`，并且只按名字安装需要的 13 个包。
+   原因：`small-package` 里也有 `docker` / `dnsmasq` / `firewall4` / `base-files` 等与官方同名的包，
+   若对它执行 `feeds install -a`，同名包会互相覆盖并导致编译中断。
+2. **第三方包来源**（均已核对 2026-11 仍可访问）：
+
+   | 包 | 来源 |
+   | --- | --- |
+   | `quickstart` / `luci-app-quickstart` | `kenzok8/small-package`（0.13.1 / 0.12.10，预编译，支持 aarch64） |
+   | `luci-app-store`（iStore）+ `taskd` / `luci-lib-taskd` / `luci-lib-xterm` | `kenzok8/small-package`（0.2.1，Lua 版，兼容 24.10） |
+   | `unishare` / `luci-app-unishare` / `webdav2` | `kenzok8/small-package` |
+   | `lucky` / `luci-app-lucky` | `kenzok8/small-package`（3.5.0，aarch64→arm64 预编译） |
+   | `luci-app-wolplus` | `kenzok8/small-package`（依赖 `etherwake`） |
+   | `luci-app-rtbwmon` | `kenzok8/small-package` |
+   | `luci-app-filemanager` | 官方 `luci` 源（24.10 分支为 JS 前端） |
+   | `luci-app-filetransfer` | `DustReliant/luci-app-filetransfer`，**直接 clone 进 `package/`**，不占 feed（该仓库根目录即单包，不走 feed 索引更稳） |
+   | `samba4-server` / `luci-app-samba4` | 官方 `packages` / `luci` 源 |
+   | `docker` / `dockerd` / `containerd` / `runc` | 官方 `packages` 源（`utils/docker*`） |
+
+3. **配置叠加**：`cp $CONFIG_FILE .config` → 追加附加片段 → `sed` 覆盖 `CONFIG_TARGET_ROOTFS_PARTSIZE`
+   → `make defconfig`。命令行输入的 rootfs 大小优先级最高。
+4. **配置校验**：归一化后逐个检查附加包是否真的 `=y`，写入 Job Summary 表格，
+   缺失的用 `::warning::` 标注（不直接失败，保证仍能产出固件；需严格模式可改成 `exit 1`）。
+5. **缓存**：`actions/cache` 缓存 `dl/` 与 `.ccache/`（`rules.mk` 中 `CONFIG_CCACHE=y` 时缓存目录为
+   `$(TOPDIR)/.ccache`），key 带 `run_id` + 前缀 restore，重跑时能命中上一次的下载与编译缓存。
+6. **编译**：`make -j$(nproc)`，失败后自动 `make -j1 V=s` 重试一次并保留完整日志。
+7. **环境变量**：`FEEDS_CONF=feeds.conf` 显式导出（本树 `scripts/feeds` 实际读取 `./feeds.conf`，
+   缺失时回退 `feeds.conf.default`；导出该变量是为了兼容读取它的派生脚本）。
+
+## 6. 本地等价复现
+
+```bash
+git clone --depth 1 https://github.com/iiibeloved/immortalwrt-rk356x.git
+cd immortalwrt-rk356x
+cp feeds.conf.default feeds.conf
+echo 'src-git small https://github.com/kenzok8/small-package.git;main' >> feeds.conf
+./scripts/feeds update -a && ./scripts/feeds install -a
+./scripts/feeds update small
+for p in quickstart luci-app-quickstart luci-app-store luci-lib-taskd luci-lib-xterm taskd \
+         unishare luci-app-unishare webdav2 luci-app-lucky lucky luci-app-wolplus luci-app-rtbwmon; do
+  ./scripts/feeds install "$p"
+done
+git clone --depth 1 https://github.com/DustReliant/luci-app-filetransfer.git package/luci-app-filetransfer
+
+cp defconfig/g68-plus-docker.config .config
+cat defconfig/g68-plus-istoreos.config >> .config
+make defconfig
+make download -j"$(nproc)"
+make -j"$(nproc)"
+
+ls bin/targets/rockchip/armv8/
+```
+
+## 7. 已知风险 / 注意事项
+
+- **首次编译约 3–4 小时**（4 vCPU runner：工具链 + Linux 6.6 内核 + samba4 + Go 组件 dockerd/webdav2 + lucky/quickstart 预编译包），
+  工作流 `timeout-minutes: 350`，接近 GitHub 单任务 6 小时上限；若频繁超时，建议拆分为
+  “先 `make tools/install toolchain/install`” 的缓存式两段构建。
+- **`kenzok8/small-package` 跟随 `master`**，不是 24.10 分支：多数插件是 `PKGARCH:=all` 的 Lua 应用，实测可行，
+  但其上游随时可能变动；如需可复现构建，可把该 feed 换成固定 commit
+  （`src-git small https://github.com/kenzok8/small-package.git;main` → `src-git-full` + 锁定 SHA 的自建 fork）。
+- **编译期仍会联网下载**：`lucky`、`quickstart` 的预编译包由各自 Makefile 在 `Build/Prepare` 里直接 `wget` GitHub Release，
+  不经过 `make download`，因此这类失败会出现在编译中段。可先手动验证对应 Release 资产是否还在。
+- **`luci-app-filetransfer` 是个人维护的第三方单包**（MIT，依赖 `luci-compat`），若上游失效，
+  工作流会告警并继续，固件仍然产出，只是少了该功能。
+- **rootfs 改为 2048 MB**：`sdcard.img.gz` 会随之变大（压缩后约 300–600 MB），
+  artifact 上传时间增加；若只想最小镜像，把 `rootfs_size` 输入改回 `200`。
+- **iStore 商店与 quickstart 的面板依赖 LuCI 前端能力**，在 24.10（Lua LuCI）上属“社区常用组合”，
+  首次刷机后请实际打开 `系统 → 快速配置`、`iStore`、`网络存储 → 共享` 三项确认可用，再决定是否长期跟进。
+- 工作流产物无签名、无 `opkg` 仓库，仅作为整机固件使用。
+
+## 8. 合入仓库
+
+无法直接推送到该仓库（无凭据），两种方式二选一：
+
+```bash
+# 方式 A：本地放进克隆的仓库再推
+git clone https://github.com/iiibeloved/immortalwrt-rk356x.git
+cd immortalwrt-rk356x
+mkdir -p .github/workflows
+cp /path/to/build-g68-plus-docker.yml .github/workflows/
+cp /path/to/g68-plus-istoreos.config   defconfig/
+git add .github defconfig
+git commit -m "ci: build g68-plus-docker with iStoreOS style packages"
+git push origin main
+```
+
+方式 B：GitHub 网页端 `Add file → Create new file`，路径填
+`.github/workflows/build-g68-plus-docker.yml`，粘贴内容后提交；同样方式添加
+`defconfig/g68-plus-istoreos.config`。提交后 Actions 会自动开始第一次编译。
