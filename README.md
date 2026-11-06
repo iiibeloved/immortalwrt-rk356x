@@ -79,6 +79,10 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 | `rootfs_size` | `512` | 只读系统分区，只决定「编译时打进去的 squashfs 能否放下」；当前 squashfs 约 150–180 MB，512 有约 3 倍余量。改大只增加镜像体积，运行期不能写入 |
 | `rootfs_data_size` | `4096` | 可写 overlay：iStore/opkg 装的包、docker 数据、配置改动（脚本 `gen_image_generic.sh` 读取 `ROOTFS_DATA_PARTSIZE`） |
 
+> docker 数据目录：镜像内置 `/etc/init.d/docker-dataroot`，开机自动把 `dockerd.globals.data_root`
+> 指到外挂盘（`<挂载点>/docker`，要求剩余 ≥8 GiB 的 ext4/btrfs/xfs/f2fs）；没有外挂盘时保持 `/opt/docker`。
+> 手工设置过 `data_root` 则不再自动改动。
+
 分区布局：`kernel 16 MiB + rootfs 512 MiB + rootfs_data 4096 MiB`，整盘镜像约 4.6 GiB，介质建议 ≥8 GB（8 GB 卡可用）。
 每次构建会在 Job Summary 里输出 squashfs 实际占用率，超过 85% 会告警提示调大 `rootfs_size`。
 | `upload_artifacts` | `true` | 上传 artifact（15 天） |

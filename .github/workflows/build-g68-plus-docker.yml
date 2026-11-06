@@ -117,6 +117,15 @@ jobs:
           fetch-depth: 1
           submodules: false
 
+      - name: 修正内置脚本的可执行位
+        run: |
+          if [ -d files ]; then
+            find files -type f \( -name '*.sh' -o -path '*/init.d/*' -o -path '*/uci-defaults/*' \) -exec chmod +x {} \;
+            find files -type f -perm -u+x -printf '%m %p\n' | head -20
+          else
+            echo "没有 files/ 目录, 跳过"
+          fi
+
       - name: 校验配置并打印目标
         run: |
           set -euo pipefail

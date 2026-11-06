@@ -277,7 +277,29 @@ tag      : g68-plus-2026.11.06      # 目标 tag；已存在则直接追加资�
 2. **extroot**：把整个 overlay 迁到 USB/SSD，`rootfs_data` 只留启动用（LuCI → 系统 → 挂载点 → 生成配置 → 启用 extroot）。
 3. **改镜像里的 rootfs_data 大小**：`scripts/gen_image_generic.sh` 里 `USERDATASIZE="2048"` 改成 `4096`（该文件不在 push 触发路径，改完需手动 Run workflow）。
 
-### 7.6 回滚 / 删除发布
+### 7.6 docker 数据目录自动落到外挂盘
+
+固件内置 `/etc/init.d/docker-dataroot`（`files/` 目录打进镜像，START=60，早于 dockerd 的 START=99），
+开机时自动把 `dockerd.globals.data_root` 指向外挂盘，默认 `/opt/docker` 只作兜底：
+
+| 情况 | 行为 |
+| --- | --- |
+| 探测到 `/mnt/*` 下由 `/dev/sd*`、`/dev/nvme*`、`/dev/mmcblk*` 挂载的 ext4/btrfs/xfs/f2fs，且剩余 ≥ 8 GiB | 设 `data_root=<挂载点>/docker`（目录自动创建），并写标记 `/etc/.docker-dataroot` |
+| 没探测到合适的外挂盘 | 若之前是脚本设到外挂盘的，自动回退 `/opt/docker`；否则保持不动 |
+| `data_root` 已被你手工改成别的路径 | 完全不动（尊重手工设置），日志 `data_root=xxx 为手工设置, 跳过自动调整` |
+
+相关日志：`logread | grep docker-dataroot`。
+
+**想固定到某块盘**（推荐按 UUID 挂载后固定路径）：手工设置一次即可，之后脚本不再改动它——
+
+```sh
+uci set dockerd.globals.data_root='/mnt/data/docker'
+uci commit dockerd && /etc/init.d/dockerd restart
+```
+
+判断条件：只要 `data_root` 不是 `/opt/docker`，且不等于标记文件里记录的「脚本上次设的值」，就视为手工设置。
+
+### 7.7 回滚 / 删除发布
 
 ```bash
 gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cleanup-tag
