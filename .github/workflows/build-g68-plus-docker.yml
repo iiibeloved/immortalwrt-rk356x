@@ -41,9 +41,9 @@ on:
         required: false
         default: defconfig/g68-plus-istoreos.config
       rootfs_size:
-        description: "rootfs 分区大小 (MB)"
+        description: "rootfs 分区大小 (MB) — 会覆盖 defconfig 里的 CONFIG_TARGET_ROOTFS_PARTSIZE"
         required: true
-        default: "2048"
+        default: "4096"
       upload_artifacts:
         description: "上传固件 artifact"
         type: boolean
@@ -81,7 +81,8 @@ env:
 
   CONFIG_FILE: ${{ github.event.inputs.defconfig || 'defconfig/g68-plus-docker.config' }}
   EXTRA_CONFIG: ${{ github.event.inputs.extra_config || 'defconfig/g68-plus-istoreos.config' }}
-  ROOTFS_SIZE: ${{ github.event.inputs.rootfs_size || '2048' }}
+  # 注意: 该值会在「应用 defconfig 与附加配置」步骤里覆盖 defconfig 中的 CONFIG_TARGET_ROOTFS_PARTSIZE
+  ROOTFS_SIZE: ${{ github.event.inputs.rootfs_size || '4096' }}
   CCACHE_MAXSIZE: 2G
 
 jobs:

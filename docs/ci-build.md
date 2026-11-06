@@ -123,7 +123,7 @@ ls bin/targets/rockchip/armv8/
   不经过 `make download`，因此这类失败会出现在编译中段。可先手动验证对应 Release 资产是否还在。
 - **`luci-app-filetransfer` 是个人维护的第三方单包**（MIT，依赖 `luci-compat`），若上游失效，
   工作流会告警并继续，固件仍然产出，只是少了该功能。
-- **rootfs 改为 2048 MB**：`sdcard.img.gz` 会随之变大（压缩后约 300–600 MB），
+- **rootfs 改为 4096 MB**（v3 起）：整盘镜像解压后约 8.2 GiB（boot 16 MiB + rootfs 4096 MiB + rootfs_data 4096 MiB），
   artifact 上传时间增加；若只想最小镜像，把 `rootfs_size` 输入改回 `200`。
 - **iStore 商店与 quickstart 的面板依赖 LuCI 前端能力**，在 24.10（Lua LuCI）上属“社区常用组合”，
   首次刷机后请实际打开 `系统 → 快速配置`、`iStore`、`网络存储 → 共享` 三项确认可用，再决定是否长期跟进。
