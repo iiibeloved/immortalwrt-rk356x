@@ -404,7 +404,7 @@ jobs:
           if-no-files-found: warn
 
       - name: 发布到 Release (免登录直链)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_release != false }}
+        if: ${{ success() && (github.event_name != 'workflow_dispatch' || inputs.publish_release != false) }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
