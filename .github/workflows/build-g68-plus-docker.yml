@@ -25,7 +25,7 @@
 name: Build G68-PLUS (iStoreOS style)
 
 permissions:
-  contents: read
+  contents: write      # 构建成功后自动发布 Release 需要
 
 on:
   workflow_dispatch:
@@ -46,10 +46,14 @@ on:
         description: "上传固件 artifact"
         type: boolean
         default: true
+      publish_release:
+        description: "构建成功后自动发布到 Release (生成免登录直链)"
+        type: boolean
+        default: true
   push:
     branches: [ main ]
     paths:
-      - ".github/workflows/build-g68-plus-docker.yml"
+      # 只按配置变更触发; 改 workflow / docs 不会自动重编(需要时手动 Run workflow)
       - "defconfig/g68-plus-docker.config"
       - "defconfig/g68-plus-istoreos.config"
   schedule:
@@ -398,6 +402,63 @@ jobs:
           path: output/*
           retention-days: 15
           if-no-files-found: warn
+
+      - name: 发布到 Release (免登录直链)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_release != false }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          T=bin/targets/rockchip/armv8
+          IMG=$(ls "$T"/*.img.gz 2>/dev/null | head -1 || true)
+          if [ -z "${IMG:-}" ]; then
+            echo "::warning::没有找到 *.img.gz, 跳过 Release 发布"
+            exit 0
+          fi
+          # tag: 默认按日期; 同一天已有同名 Release 时追加 -r<run_number>, 保证多次构建并存
+          TAG="g68-plus-$(TZ=Asia/Shanghai date +%Y.%m.%d)"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            TAG="${TAG}-r${GITHUB_RUN_NUMBER}"
+          fi
+          PKGS=$(grep -c ' - ' "$T"/*.manifest 2>/dev/null || echo 0)
+          KVER=$(sed -n 's/^CONFIG_LINUX_\([0-9]\)_\([0-9]*\)=y/\1.\2/p' .config | head -1 || true)
+          SHA=$(sha256sum "$IMG" | cut -d' ' -f1)
+          {
+            echo "## ImmortalWrt · rockchip/armv8 · NSY G68-PLUS (RK3568)"
+            echo ""
+            echo "| 项目 | 值 |"
+            echo "| --- | --- |"
+            echo "| 构建 | [run #${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
+            echo "| 提交 | \`${GITHUB_SHA:0:8}\` |"
+            echo "| 内核 | Linux ${KVER:-6.6} |"
+            echo "| 软件包 | ${PKGS} 个 |"
+            echo "| 镜像 sha256 | \`${SHA}\` |"
+            echo ""
+            echo "### 集成内容"
+            echo ""
+            echo "- iStoreOS 风格: luci-app-quickstart + quickstart, luci-app-store + taskd/luci-lib-taskd/luci-lib-xterm"
+            echo "- 共享/运维: unishare(samba4+webdav2), lucky, luci-app-wolplus, luci-app-rtbwmon"
+            echo "- 文件管理: luci-app-filemanager, luci-app-filetransfer"
+            echo "- Samba4: samba4-server + luci-app-samba4"
+            echo "- Docker: dockerd / containerd / runc / docker"
+            echo "- 已按配置关闭: shadowsocks-rust (见 defconfig/g68-plus-istoreos.config)"
+            echo ""
+            echo "### 刷机"
+            echo ""
+            echo '```bash'
+            echo "sha256sum -c sha256sums --ignore-missing"
+            echo "gunzip immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz"
+            echo "sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/dev/sdX bs=4M conv=fsync status=progress"
+            echo '```'
+            echo ""
+            echo "也可在 LuCI「系统 → 备份/升级」直接上传 .img.gz。"
+          } > /tmp/notes.md
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "ImmortalWrt G68-PLUS · ${TAG}" \
+            --notes-file /tmp/notes.md \
+            "$IMG" "$T/sha256sums"
+          echo "---- Release 资产 ----"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY"
 
       - name: 上传编译日志 (仅失败时)
         if: failure()

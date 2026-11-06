@@ -35,7 +35,7 @@ defconfig/g68-plus-istoreos.config            # 附加配置片段（差异项�
 | 触发 | 说明 |
 | --- | --- |
 | `workflow_dispatch` | 手动运行，可覆盖 `defconfig` / `extra_config` / `rootfs_size` / 是否上传 artifact |
-| `push`（`main`） | 仅当改动工作流本身或 `defconfig/` 下两个文件时触发 |
+| `push`（`main`） | **仅当 `defconfig/` 下两个文件变动时**触发（改 workflow / docs 不重编，需要时手动 Run workflow） |
 | `schedule` | `0 18 * * 0`（UTC）= 每周一 02:00（Asia/Shanghai），用于跟踪 feeds / 插件更新 |
 
 `concurrency` 已设置但 `cancel-in-progress: false`，避免一次 3 小时的编译被后续提交打断。
@@ -193,3 +193,30 @@ d4a1908a71dc8b7977eb626b07b0f291b575cc35b3958757b58aaec56eeba41d
   其余 20 个 iStoreOS 相关包不受影响；校验步骤的表格里会显示 `⛔ 已按预期关闭` / `⚠️ 预期关闭但仍启用`。
 - `dl/` 与 `.ccache/` 已被 `actions/cache` 缓存，二次构建的下载与 C 编译会明显加快。
 - 定时任务每周一 02:00 会自动重编，用于跟踪 feeds / 插件更新。
+
+
+## 10. 自动发布 Release（免登录直链）
+
+构建成功后会**自动**把固件挂到 GitHub Release，产出无需登录、不随 artifact 过期的直链：
+
+```
+https://github.com/iiibeloved/immortalwrt-rk356x/releases/download/<tag>/<file>.img.gz
+```
+
+- **tag 规则**：`g68-plus-YYYY.MM.DD`（按 Asia/Shanghai 日期）；同一天已有同名 Release 时自动加 `-r<run_number>`，
+  因此「带 ss-rust 版」和「无 ss-rust 版」可以并存对比。
+- **资产**：`immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz` + `sha256sums`。
+- **Release 说明**：自动写入来源 run、commit、内核版本、包数量、镜像 sha256、集成清单与刷机命令。
+- **关闭方式**：手动 Run workflow 时把 `publish_release` 设为 false；或从 workflow 里删掉「发布到 Release」这一步。
+- 需要的权限已写在 workflow 顶部（`permissions: contents: write`），使用的是内置 `GITHUB_TOKEN`，无需额外配置 secret。
+
+### 补发历史构建
+
+`.github/workflows/publish-release.yml`（仅手动 / API 触发）可以把**任意历史 run 的 artifact** 补挂到 Release：
+
+```
+Actions → Publish firmware to Release → Run workflow
+  run_id   : 42186516665              # 来源构建
+  artifact : immortalwrt-g68-plus-6   # 该 run 的 artifact 名
+  tag      : g68-plus-2026.11.06      # 目标 tag（已存在则直接上传资产）
+```
