@@ -42,7 +42,7 @@
 | --- | --- | --- |
 | `defconfig` | `defconfig/g68-plus-docker.config` | 基础配置，改它等于换机型 |
 | `extra_config` | `defconfig/g68-plus-istoreos.config` | 附加差异项（iStoreOS 插件等） |
-| `rootfs_size` | `4096` | rootfs 分区大小（MB），**会覆盖 defconfig 里的值**；4096 时镜像解压后约 8.2 GiB，介质需 ≥9 GB；改小镜像更小 |
+| `rootfs_size` | `4096` | **只影响 rootfs 分区**（只读系统分区）；`rootfs_data`（可写 overlay、iStore/opkg 装包、docker 数据区）固定 2048 MiB，不随它变化。4096 时整盘镜像约 6.1 GiB |
 | `upload_artifacts` | `true` | 是否上传 artifact（15 天有效） |
 | `publish_release` | `true` | 成功后是否自动发 Release（生成免登录直链） |
 
@@ -110,7 +110,7 @@ gh run list --repo iiibeloved/immortalwrt-rk356x --limit 3
 | 16 | 修复 rust vendor 校验并预编译 rust | **0（自动跳过）** / 118 min | 当前配置无 rust 组件 → 直接跳过 |
 | 17 | 编译固件（`make world` 剩余部分） | 60–75 min | 内核 + u-boot/ATF + 450+ 包 + 镜像打包 |
 | 18 | 收集固件 | <1 min | 拷到 `output/` |
-| 19 | 上传固件 artifact | 1–2 min | 约 165–190 MB（rootfs 4096 时略大） |
+| 19 | 上传固件 artifact | 1–2 min | 165–200 MB（零区压缩率高，rootfs 变大后变化不大） |
 | 20 | 发布到 Release（自动） | 1–2 min | tag `g68-plus-YYYY.MM.DD`，上传 `*.img.gz` + `sha256sums` |
 
 **总时长参考**：当前配置（无 ss-rust）**≈ 2 小时 20 分 – 2 小时 40 分**；
@@ -250,10 +250,30 @@ tag      : g68-plus-2026.11.06      # 目标 tag；已存在则直接追加资�
 ### 7.4 调整 rootfs 分区
 
 不改文件，Run workflow 时把 `rootfs_size` 填成别的值（如 `1024` / `4096`）。
-注意 4096 MB 时整盘镜像解压后约 8.2 GiB（分区：boot 16 MiB + rootfs 4096 MiB + rootfs_data 4096 MiB），
-artifact 约 165–190 MB；目标 eMMC/SD 卡需 ≥9 GB，改小可省写入时间。
+注意分区规则（`scripts/gen_image_generic.sh`）：
 
-### 7.5 回滚 / 删除发布
+| 分区 | 大小 | 来源 | 用途 |
+| --- | --- | --- | --- |
+| kernel/boot | 16 MiB | `CONFIG_TARGET_KERNEL_PARTSIZE` | 内核 + dtb + boot.scr |
+| rootfs | `rootfs_size`（现 4096 MiB） | `CONFIG_TARGET_ROOTFS_PARTSIZE`，被 workflow 覆盖 | **只读 squashfs**，构建时打进固件的 497 个包都在这里 |
+| rootfs_data | **固定 2048 MiB**（脚本里 `USERDATASIZE="2048"` 写死） | 不受 `rootfs_size` 影响 | 可写 overlay：配置改动、iStore/opkg 装的包、docker 数据 |
+
+4096 配置下整盘镜像约 **6.1 GiB**（16 + 4096 + 2048 + 对齐空隙），`.img.gz` 约 165–200 MB；
+目标 eMMC/SD 卡建议 ≥8 GB。**注意：把 rootfs 调大并不会增大 docker / iStore 的可用空间**（那部分在 rootfs_data）。
+
+### 7.5 给 docker / iStore 扩容（rootfs_data 只有 2048 MiB）
+
+`rootfs_size` 调大**不会**扩大 docker / iStore 的可用空间，因为那部分在固定 2048 MiB 的 `rootfs_data`（overlay）里。三种做法：
+
+1. **docker 数据放外部盘（推荐）**：LuCI → Docker → 配置，把 `data_root` 改到挂载点，例如
+   ```
+   uci set dockerd.globals.data_root='/mnt/sda1/docker'
+   uci commit dockerd && /etc/init.d/dockerd restart
+   ```
+2. **extroot**：把整个 overlay 迁到 USB/SSD，`rootfs_data` 只留启动用（LuCI → 系统 → 挂载点 → 生成配置 → 启用 extroot）。
+3. **改镜像里的 rootfs_data 大小**：`scripts/gen_image_generic.sh` 里 `USERDATASIZE="2048"` 改成 `4096`（该文件不在 push 触发路径，改完需手动 Run workflow）。
+
+### 7.6 回滚 / 删除发布
 
 ```bash
 gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cleanup-tag
@@ -275,8 +295,8 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
    首次刷机后建议实际打开验证；失效时构建只是少了那个功能，不影响出固件。
 7. **`kenzok8/small-package` 跟随 master**：上游随时变动，同名包版本会漂移；
    需要完全可复现就把该 feed 锁定到某个 commit（`src-git-full` + 固定 SHA 的自建 fork）。
-8. **rootfs 4096 MB 会显著增大整盘镜像**（解压后约 8.2 GiB，`.img.gz` 仍只有 165–190 MB）；
-   目标介质需 ≥9 GB；只想要最小镜像就把 `rootfs_size` 调回 `200`（解压后约 0.45 GiB）。
+8. **`rootfs_size` 只改只读系统分区**：调大不会给 docker / iStore 扩容（它们在固定的 2048 MiB `rootfs_data` 里）；
+   它只让整盘镜像变大（4096 时约 6.1 GiB，介质建议 ≥8 GB）。要给 docker 扩容，见 7.6。
 9. **artifact 15 天过期**：重要固件立刻转存到 Release（workflow 已自动做）或本地归档。
 10. **PAT/Token 权限**：手动触发需要 `workflow`（classic）或 Actions: write（fine-grained）；
     自动发布用的是内置 `GITHUB_TOKEN`（`permissions: contents: write`），不需要你配 secret。
@@ -293,7 +313,7 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
 - [ ] 确认 `defconfig/g68-plus-istoreos.config` 里想加的包都已写入（且包名拼写正确）
 - [ ] 确认上次构建的失败日志已处理（如有）
 - [ ] 确认没有正在运行的构建（避免并发）
-- [ ] 决定 `rootfs_size`（默认 **4096**，覆盖 defconfig；介质需 ≥9 GB）
+- [ ] 决定 `rootfs_size`（默认 **4096**，只影响只读 rootfs；介质 ≥8 GB；docker 空间另见 7.6）
 - [ ] 决定是否 `publish_release`（默认 true）
 - [ ] 触发方式：等周一 02:00 定时 / 或手动 Run workflow
 - [ ] 构建结束后：看 Job Summary 的包表格 → 下载 artifact 或 Release → 校验 sha256 → 刷机
