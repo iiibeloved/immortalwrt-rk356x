@@ -29,12 +29,13 @@ STOP=10
 : "${MOUNTS:=/proc/mounts}"
 DRYRUN="${DOCKER_DISK_DRYRUN:-0}"
 
-DOCKER_MIB=20480            # 20 GiB 给 docker
+DOCKER_MIB=51200            # 50 GiB 给 docker
 DOCKER_LABEL=ext_relay
 DOCKER_MP=/mnt/ext_relay
 DATA_LABEL=Data
 DATA_MP=/mnt/data
-MIN_FREE_MIB=28672          # 20 GiB + 至少 8 GiB 给 Data 才动手
+MIN_DATA_MIB=8192           # Data 至少 8 GiB
+MIN_FREE_MIB=$(( DOCKER_MIB + MIN_DATA_MIB ))   # 需 50 GiB + 8 GiB 才动手
 
 log() { echo "$(date '+%F %T') $*" >> "$LOG"; logger -t docker-disk "$*" 2>/dev/null; }
 
@@ -150,7 +151,7 @@ start() {
 	log "启动盘 /dev/$DISK 总 $((size/1073741824)) GiB, 已用 $((end/1073741824)) GiB, 剩余 ${free_mib} MiB"
 
 	if [ "$free_mib" -lt "$MIN_FREE_MIB" ]; then
-		log "剩余不足 ${MIN_FREE_MIB} MiB (需 20 GiB docker + 8 GiB Data), 不建分区"
+		log "剩余不足 ${MIN_FREE_MIB} MiB (需 $((DOCKER_MIB/1024)) GiB docker + $((MIN_DATA_MIB/1024)) GiB Data), 不建分区"
 		return 0
 	fi
 

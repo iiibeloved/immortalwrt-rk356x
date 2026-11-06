@@ -84,7 +84,7 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 > 手工设置过 `data_root` 则不再自动改动。
 >
 > 另外镜像内置 `/etc/init.d/docker-disk`：**首次启动**会把 eMMC 上镜像之外的剩余空间（≥28 GiB 时）拆成两块——
-> **20 GiB ext4（卷标 `ext_relay`）挂 `/mnt/ext_relay` 给 docker**，其余 ext4（卷标 `Data`）挂 `/mnt/data` 作共享盘；
+> **50 GiB ext4（卷标 `ext_relay`）挂 `/mnt/ext_relay` 给 docker**，其余 ext4（卷标 `Data`）挂 `/mnt/data` 作共享盘；
 > 幂等、只追加不改动已有分区、失败自动回退 `/opt/docker`；关闭方式 `touch /etc/.docker-disk.done`。详见 build-guide 7.8。
 
 分区布局：`kernel 16 MiB + rootfs 512 MiB + rootfs_data 4096 MiB`，整盘镜像约 4.6 GiB，介质建议 ≥8 GB（8 GB 卡可用）。

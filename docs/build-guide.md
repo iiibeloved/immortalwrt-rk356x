@@ -307,8 +307,8 @@ uci commit dockerd && /etc/init.d/dockerd restart
 | 分区 | 大小 | 文件系统 / 卷标 | 挂载点 | 用途 |
 | --- | --- | --- | --- | --- |
 | `p4` | 剩余空间全部 | **扩展分区（容器）** | — | 只用来容纳下面两个逻辑分区 |
-| `p5`（逻辑） | **20 GiB** | ext4 / **`ext_relay`** | `/mnt/ext_relay` | **docker 数据目录**（`dockerd.data_root=/mnt/ext_relay/docker`） |
-| `p6`（逻辑） | 其余（约 230 GB） | ext4 / **`Data`** | `/mnt/data` | 共享盘 |
+| `p5`（逻辑） | **50 GiB** | ext4 / **`ext_relay`** | `/mnt/ext_relay` | **docker 数据目录**（`dockerd.data_root=/mnt/ext_relay/docker`） |
+| `p6`（逻辑） | 其余（约 184 GiB ≈ 197 GB） | ext4 / **`Data`** | `/mnt/data` | 共享盘 |
 
 > 为什么用扩展+逻辑分区：MBR 最多 4 个主分区，镜像已占用 kernel/rootfs/rootfs_data 三个，
 > 只剩一个主分区槽位，所以两块新盘放在一个扩展分区里。
@@ -316,7 +316,7 @@ uci commit dockerd && /etc/init.d/dockerd restart
 执行细节：
 
 1. 由 `/rom` 反查启动盘（`/dev/mmcblk0` 或 `mmcblk1`）；
-2. 剩余空间 ≥ **28 GiB**（20 GiB docker + 至少 8 GiB Data）才动手，从最后一个分区末尾往后追加；
+2. 剩余空间 ≥ **58 GiB**（50 GiB docker + 至少 8 GiB Data）才动手，从最后一个分区末尾往后追加；
 3. `parted` 建扩展分区 + 两个逻辑分区 → `mkfs.ext4 -m 0 -E lazy_itable_init=1,discard` 并打卷标；
 4. 分别挂到 `/mnt/ext_relay`、`/mnt/data`，写入 fstab（按 **UUID**，之后每次开机自动挂载）；
 5. `dockerd.globals.data_root=/mnt/ext_relay/docker` 并重启 docker。
@@ -327,7 +327,7 @@ uci commit dockerd && /etc/init.d/dockerd restart
 | 只追加 | 只从最后一个分区末尾往后建，p1–p3 绝不改动 |
 | 失败兜底 | 任一步失败打日志并保留默认 `/opt/docker`，不阻塞开机 |
 | 只跑一次 | 成功后写 `/etc/.docker-disk.done` |
-| 小盘保护 | 剩余 < 28 GiB 直接跳过 |
+| 小盘保护 | 剩余 < 58 GiB 直接跳过 |
 | 在线改表 | 新增分区内核不立刻识别，脚本用 `mknod` 造 `/dev/mmcblk0p5|p6`（minor 5/6）先挂上；重启后正常识别，之后走 fstab+UUID |
 
 开关与排错：
@@ -338,7 +338,8 @@ rm -f /etc/.docker-disk.done && /etc/init.d/docker-disk start    # 手动重跑
 cat /etc/.docker-disk.log ; logread | grep docker-disk           # 日志
 ```
 
-想改 docker 分区的容量：改脚本里的 `DOCKER_MIB`（默认 20480 = 20 GiB），或改 `DOCKER_LABEL` / `DATA_LABEL` / 挂载点。
+想改 docker 分区容量：改脚本里的 `DOCKER_MIB`（默认 **51200 = 50 GiB**；阈值会自动跟着变 = DOCKER_MIB + 8 GiB），
+或改 `DOCKER_LABEL` / `DATA_LABEL` / 挂载点。
 
 ### 7.9 回滚 / 删除发布
 
