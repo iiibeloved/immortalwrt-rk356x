@@ -275,11 +275,20 @@ jobs:
             echo "::warning::有 ${bad} 个源码包下载失败, 编译阶段可能报错 (见 download.log)"
           fi
 
-      - name: 解包 rust 源码并修复 vendor 校验
+      - name: 构建工具链 (tools + toolchain)
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" tools/install toolchain/install 2>&1 | tee toolchain.log
+          TC=$(ls -d staging_dir/toolchain-* 2>/dev/null | head -1 || true)
+          echo "工具链目录: ${TC:-未找到}"
+          ls "$TC"/bin/*gcc 2>/dev/null | head -3 || true
+          "$TC"/bin/aarch64-openwrt-linux-musl-gcc --version | head -1
+
+      - name: 修复 rust vendor 校验并预编译 rust host
         run: |
           set -o pipefail
           RUST_TARGET=package/feeds/packages/rust/host/compile
-          # 第一次调用只为了触发解包: checksum 问题会在 1 分钟内失败, 属预期
+          # 第一次: 只为触发解包; vendor checksum 问题会在一分钟内失败, 属预期
           make -j2 "$RUST_TARGET" 2>&1 | tee rust-host.log || true
           D=$(ls -d build_dir/*/host/rustc-*-src 2>/dev/null | head -1 || true)
           if [ -z "${D:-}" ]; then
@@ -317,16 +326,13 @@ jobs:
           for s in samples:
               print('  -', s)
           PY
-
-      - name: 预编译 rust host
-        run: |
-          set -o pipefail
-          if make -j2 package/feeds/packages/rust/host/compile 2>&1 | tee -a rust-host.log; then
+          # 第二次: 真正编译 rust host
+          if make -j2 "$RUST_TARGET" 2>&1 | tee -a rust-host.log; then
             echo "rust host 预编译通过"
             exit 0
           fi
           echo "::warning::rust host 预编译失败, 用 V=s 重跑取完整报错"
-          timeout 1200 make -j1 V=s package/feeds/packages/rust/host/compile 2>&1 | tee -a rust-host.log || true
+          timeout 1200 make -j1 V=s "$RUST_TARGET" 2>&1 | tee -a rust-host.log || true
           exit 1
 
       - name: 编译固件
@@ -384,5 +390,6 @@ jobs:
             build.log
             download.log
             rust-host.log
+            toolchain.log
           retention-days: 7
           if-no-files-found: ignore
