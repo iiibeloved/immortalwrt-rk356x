@@ -41,7 +41,11 @@ on:
         required: false
         default: defconfig/g68-plus-istoreos.config
       rootfs_size:
-        description: "rootfs 分区大小 (MB) — 会覆盖 defconfig 里的 CONFIG_TARGET_ROOTFS_PARTSIZE"
+        description: "rootfs 分区(只读系统分区, 构建时打包的包在这)MB"
+        required: true
+        default: "2048"
+      rootfs_data_size:
+        description: "rootfs_data 分区(可写 overlay: iStore/opkg 装包、docker 数据、配置)MB"
         required: true
         default: "4096"
       upload_artifacts:
@@ -85,7 +89,9 @@ env:
   CONFIG_FILE: ${{ github.event.inputs.defconfig || 'defconfig/g68-plus-docker.config' }}
   EXTRA_CONFIG: ${{ github.event.inputs.extra_config || 'defconfig/g68-plus-istoreos.config' }}
   # 注意: 该值会在「应用 defconfig 与附加配置」步骤里覆盖 defconfig 中的 CONFIG_TARGET_ROOTFS_PARTSIZE
-  ROOTFS_SIZE: ${{ github.event.inputs.rootfs_size || '4096' }}
+  ROOTFS_SIZE: ${{ github.event.inputs.rootfs_size || '2048' }}
+  # rootfs_data 大小(传给 scripts/gen_image_generic.sh, 它读这个环境变量)
+  ROOTFS_DATA_PARTSIZE: ${{ github.event.inputs.rootfs_data_size || '4096' }}
   CCACHE_MAXSIZE: 2G
 
 jobs:
@@ -376,6 +382,71 @@ jobs:
       # ---------------------------------------------------------------------
       # 5. 产物收集与上传
       # ---------------------------------------------------------------------
+      - name: 校验镜像分区表
+        run: |
+          set -e
+          python3 - <<'PY'
+          import glob, gzip, os, struct, sys
+
+          imgs = glob.glob('bin/targets/rockchip/armv8/*.img.gz')
+          if not imgs:
+              print('::error::没有找到 *.img.gz')
+              sys.exit(1)
+          img = imgs[0]
+          print('镜像:', img)
+          with gzip.open(img, 'rb') as f:
+              head = f.read(8 * 1024 * 1024)
+
+          sig = head[440:444]
+          print('MBR 磁盘签名:', sig)
+          print('| 分区 | 起始 | 大小(MiB) |')
+          print('| --- | --- | --- |')
+          parts = []
+          for i in range(4):
+              e = head[446 + i * 16: 446 + (i + 1) * 16]
+              if len(e) < 16 or e[4] == 0:
+                  continue
+              lba = struct.unpack('<I', e[8:12])[0]
+              cnt = struct.unpack('<I', e[12:16])[0]
+              size_mib = cnt * 512 / 1048576
+              parts.append(size_mib)
+              print(f'| p{i+1} | {lba*512/1048576:.0f} MiB | {size_mib:.0f} |')
+
+          want_kernel = 16
+          want_rootfs = int(os.environ.get('ROOTFS_SIZE', '2048'))
+          want_data = int(os.environ.get('ROOTFS_DATA_PARTSIZE', '4096'))
+          print()
+          print(f'期望: kernel≈{want_kernel} MiB, rootfs≈{want_rootfs} MiB, rootfs_data≈{want_data} MiB')
+          ok = (len(parts) == 3
+                and abs(parts[0] - want_kernel) <= 2
+                and abs(parts[1] - want_rootfs) <= 2
+                and abs(parts[2] - want_data) <= 2)
+          if not ok:
+              print('::error::分区大小与期望不符 (实际 kernel/rootfs/rootfs_data = '
+                    + ', '.join(f'{p:.0f}' for p in parts) + ' MiB)')
+              sys.exit(1)
+          print('分区表校验通过')
+          PY
+          echo "---- 写入 Job Summary ----"
+          {
+            echo "### 镜像分区表"
+            echo ""
+            echo "| 分区 | 起始 | 大小 |"
+            echo "| --- | --- | --- |"
+            python3 - <<'PY'
+          import glob, gzip, struct
+          img = glob.glob('bin/targets/rockchip/armv8/*.img.gz')[0]
+          with gzip.open(img, 'rb') as f:
+              head = f.read(1024 * 1024)
+          names = {0: 'kernel', 1: 'rootfs', 2: 'rootfs_data'}
+          for i in range(3):
+              e = head[446 + i * 16: 446 + (i + 1) * 16]
+              lba = struct.unpack('<I', e[8:12])[0]
+              cnt = struct.unpack('<I', e[12:16])[0]
+              print(f"| `{names.get(i, i)}` | {lba*512/1048576:.0f} MiB | {cnt*512/1048576:.0f} MiB |")
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: 收集固件
         if: always()
         run: |

@@ -15,10 +15,10 @@
 | 想立即构建 | Actions → `Build G68-PLUS (iStoreOS style)` → **Run workflow**（≈ 2.5 小时） |
 | 最近一次成功构建 | [run #42186516665](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42186516665) · commit `c6b3a90d` · 4 小时 09 分 |
 | 最近一次发布 | [g68-plus-2026.11.06](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.06)（含 shadowsocks-rust，167 MB） |
-| 当前仓库配置 | 已关闭 `shadowsocks-rust`（省约 2 小时）· **rootfs 4096 MB**（`rootfs_data` 仍为 2048 MiB）· 22 个 iStoreOS 风格包 + samba4 + docker 引擎 |
+| 当前仓库配置 | 已关闭 `shadowsocks-rust`（省约 2 小时）· **`rootfs` 2048 MiB + `rootfs_data` 4096 MiB** · 22 个 iStoreOS 风格包 + samba4 + docker 引擎 |
 | 下次构建预期 | ≈ 2.5 小时；成功后自动发布 `g68-plus-2026.11.09` Release（免登录直链） |
 | 构建失败 | 自动开 Issue：标题 `CI 构建失败: … #<run>`，正文含失败步骤、run 链接与排查指引；同类未关闭则追加评论 |
-| 详细步骤 | [docs/build-guide.md](docs/build-guide.md)（触发方式 / 20 步流程 / 失败速查表 / 12 条注意事项） |
+| 详细步骤 | [docs/build-guide.md](docs/build-guide.md)（触发方式 / 22 步流程 / 失败速查表 / 12 条注意事项） |
 
 ---
 
@@ -76,7 +76,10 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 | --- | --- | --- |
 | `defconfig` | `defconfig/g68-plus-docker.config` | 基础配置（换机型就改这个） |
 | `extra_config` | `defconfig/g68-plus-istoreos.config` | 附加差异项（iStoreOS 插件等） |
-| `rootfs_size` | `4096` | **只影响 rootfs 分区**（只读系统分区，会覆盖 defconfig 的值）；`rootfs_data`（可写 overlay / docker 区）固定 2048 MiB，不受它影响。4096 时整盘镜像约 6.1 GiB，介质建议 ≥8 GB |
+| `rootfs_size` | `2048` | 只读系统分区（构建时打进固件的包在这，会覆盖 defconfig 的值） |
+| `rootfs_data_size` | `4096` | 可写 overlay：iStore/opkg 装的包、docker 数据、配置改动（脚本 `gen_image_generic.sh` 读取 `ROOTFS_DATA_PARTSIZE`） |
+
+分区布局：`kernel 16 MiB + rootfs 2048 MiB + rootfs_data 4096 MiB`，整盘镜像约 6.1 GiB，介质建议 ≥8 GB。
 | `upload_artifacts` | `true` | 上传 artifact（15 天） |
 | `publish_release` | `true` | 成功后自动发布 Release |
 
@@ -101,7 +104,7 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 
 | 文档 | 内容 |
 | --- | --- |
-| [docs/build-guide.md](docs/build-guide.md) | **下次编译详细教程**：触发方式、20 步流程与实测耗时、产物下载、刷机、失败速查表、12 条注意事项、30 秒检查清单 |
+| [docs/build-guide.md](docs/build-guide.md) | **下次编译详细教程**：触发方式、22 步流程与实测耗时、产物下载、刷机、失败速查表、12 条注意事项、30 秒检查清单 |
 | [docs/ci-build.md](docs/ci-build.md) | 构建方案设计、依赖来源表、实测记录与已踩过的坑 |
 | [.github/workflows/publish-release.yml](.github/workflows/publish-release.yml) | 把任意历史 run 的 artifact 补发到指定 Release |
 

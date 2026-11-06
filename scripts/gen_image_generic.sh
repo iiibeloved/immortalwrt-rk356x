@@ -12,7 +12,9 @@ KERNELDIR="$3"
 ROOTFSSIZE="$4"
 ROOTFSIMAGE="$5"
 ALIGN="$6"
-USERDATASIZE="2048"
+# 可写数据分区(rootfs_data: overlay / iStore / docker 数据)大小, 单位 MiB
+# 可用环境变量 ROOTFS_DATA_PARTSIZE 覆盖(本仓库默认 4096; 上游原值为 2048)
+USERDATASIZE="${ROOTFS_DATA_PARTSIZE:-4096}"
 
 rm -f "$OUTPUT"
 

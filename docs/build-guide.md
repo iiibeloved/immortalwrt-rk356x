@@ -42,7 +42,8 @@
 | --- | --- | --- |
 | `defconfig` | `defconfig/g68-plus-docker.config` | 基础配置，改它等于换机型 |
 | `extra_config` | `defconfig/g68-plus-istoreos.config` | 附加差异项（iStoreOS 插件等） |
-| `rootfs_size` | `4096` | **只影响 rootfs 分区**（只读系统分区）；`rootfs_data`（可写 overlay、iStore/opkg 装包、docker 数据区）固定 2048 MiB，不随它变化。4096 时整盘镜像约 6.1 GiB |
+| `rootfs_size` | `2048` | 只读系统分区（构建期打包的包在这），会覆盖 defconfig 里的值 |
+| `rootfs_data_size` | `4096` | 可写 overlay：iStore/opkg 装包、docker 数据、配置改动（镜像脚本读 `ROOTFS_DATA_PARTSIZE`） |
 | `upload_artifacts` | `true` | 是否上传 artifact（15 天有效） |
 | `publish_release` | `true` | 成功后是否自动发 Release（生成免登录直链） |
 
@@ -56,7 +57,8 @@ gh workflow run build-g68-plus-docker.yml \
   --repo iiibeloved/immortalwrt-rk356x --ref main \
   -f defconfig=defconfig/g68-plus-docker.config \
   -f extra_config=defconfig/g68-plus-istoreos.config \
-  -f rootfs_size=4096 \
+  -f rootfs_size=2048 \
+  -f rootfs_data_size=4096 \
   -f upload_artifacts=true \
   -f publish_release=true
 
@@ -68,7 +70,8 @@ curl -X POST \
   -d '{"ref":"main","inputs":{
         "defconfig":"defconfig/g68-plus-docker.config",
         "extra_config":"defconfig/g68-plus-istoreos.config",
-        "rootfs_size":"4096",
+        "rootfs_size":"2048",
+        "rootfs_data_size":"4096",
         "upload_artifacts":"true",
         "publish_release":"true"}}'
 ```
@@ -90,7 +93,7 @@ gh run list --repo iiibeloved/immortalwrt-rk356x --limit 3
 
 ---
 
-## 2. 编译过程（20 个步骤，按实际执行顺序）
+## 2. 编译过程（22 个步骤，按实际执行顺序）
 
 | # | 步骤 | 实测耗时 | 说明 |
 | --- | --- | --- | --- |
@@ -249,21 +252,21 @@ tag      : g68-plus-2026.11.06      # 目标 tag；已存在则直接追加资�
 
 ### 7.4 调整 rootfs 分区
 
-不改文件，Run workflow 时把 `rootfs_size` 填成别的值（如 `1024` / `4096`）。
+两个独立参数，Run workflow 时直接填：`rootfs_size`（只读系统分区，默认 2048）与 `rootfs_data_size`（可写 overlay，默认 4096）。
 注意分区规则（`scripts/gen_image_generic.sh`）：
 
 | 分区 | 大小 | 来源 | 用途 |
 | --- | --- | --- | --- |
 | kernel/boot | 16 MiB | `CONFIG_TARGET_KERNEL_PARTSIZE` | 内核 + dtb + boot.scr |
-| rootfs | `rootfs_size`（现 4096 MiB） | `CONFIG_TARGET_ROOTFS_PARTSIZE`，被 workflow 覆盖 | **只读 squashfs**，构建时打进固件的 497 个包都在这里 |
-| rootfs_data | **固定 2048 MiB**（脚本里 `USERDATASIZE="2048"` 写死） | 不受 `rootfs_size` 影响 | 可写 overlay：配置改动、iStore/opkg 装的包、docker 数据 |
+| rootfs | `rootfs_size`（现 **2048 MiB**） | `CONFIG_TARGET_ROOTFS_PARTSIZE`，被 workflow 覆盖 | **只读 squashfs**，构建时打进固件的 497 个包都在这里 |
+| rootfs_data | `rootfs_data_size`（现 **4096 MiB**） | 镜像脚本 `gen_image_generic.sh` 读 `ROOTFS_DATA_PARTSIZE`（本仓库默认 4096） | 可写 overlay：配置改动、iStore/opkg 装的包、docker 数据 |
 
-4096 配置下整盘镜像约 **6.1 GiB**（16 + 4096 + 2048 + 对齐空隙），`.img.gz` 约 165–200 MB；
-目标 eMMC/SD 卡建议 ≥8 GB。**注意：把 rootfs 调大并不会增大 docker / iStore 的可用空间**（那部分在 rootfs_data）。
+当前配置整盘镜像约 **6.1 GiB**（16 + 2048 + 4096 + 对齐空隙），`.img.gz` 约 165–200 MB；目标 eMMC/SD 卡建议 ≥8 GB。
+**docker / iStore 的可用空间由 `rootfs_data_size` 决定**（现 4096 MiB），与 `rootfs_size` 无关。
 
 ### 7.5 给 docker / iStore 扩容（rootfs_data 只有 2048 MiB）
 
-`rootfs_size` 调大**不会**扩大 docker / iStore 的可用空间，因为那部分在固定 2048 MiB 的 `rootfs_data`（overlay）里。三种做法：
+扩容 docker / iStore 要调的是 **`rootfs_data_size`**（现 4096 MiB）。另外三种免重编做法：
 
 1. **docker 数据放外部盘（推荐）**：LuCI → Docker → 配置，把 `data_root` 改到挂载点，例如
    ```
@@ -295,8 +298,8 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
    首次刷机后建议实际打开验证；失效时构建只是少了那个功能，不影响出固件。
 7. **`kenzok8/small-package` 跟随 master**：上游随时变动，同名包版本会漂移；
    需要完全可复现就把该 feed 锁定到某个 commit（`src-git-full` + 固定 SHA 的自建 fork）。
-8. **`rootfs_size` 只改只读系统分区**：调大不会给 docker / iStore 扩容（它们在固定的 2048 MiB `rootfs_data` 里）；
-   它只让整盘镜像变大（4096 时约 6.1 GiB，介质建议 ≥8 GB）。要给 docker 扩容，见 7.6。
+8. **两个参数各管各的**：`rootfs_size` 是只读系统分区，`rootfs_data_size` 才是 docker / iStore 的可用空间；
+   二者之和决定整盘镜像大小（当前 16+2048+4096 ≈ 6.1 GiB，介质建议 ≥8 GB）。改完会有一道 `校验镜像分区表` 步骤核对实际 MBR。
 9. **artifact 15 天过期**：重要固件立刻转存到 Release（workflow 已自动做）或本地归档。
 10. **PAT/Token 权限**：手动触发需要 `workflow`（classic）或 Actions: write（fine-grained）；
     自动发布用的是内置 `GITHUB_TOKEN`（`permissions: contents: write`），不需要你配 secret。
@@ -313,7 +316,7 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
 - [ ] 确认 `defconfig/g68-plus-istoreos.config` 里想加的包都已写入（且包名拼写正确）
 - [ ] 确认上次构建的失败日志已处理（如有）
 - [ ] 确认没有正在运行的构建（避免并发）
-- [ ] 决定 `rootfs_size`（默认 **4096**，只影响只读 rootfs；介质 ≥8 GB；docker 空间另见 7.6）
+- [ ] 决定 `rootfs_size`（默认 **2048**，只读系统分区）与 `rootfs_data_size`（默认 **4096**，docker/iStore 空间）
 - [ ] 决定是否 `publish_release`（默认 true）
 - [ ] 触发方式：等周一 02:00 定时 / 或手动 Run workflow
 - [ ] 构建结束后：看 Job Summary 的包表格 → 下载 artifact 或 Release → 校验 sha256 → 刷机
