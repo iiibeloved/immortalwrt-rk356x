@@ -15,7 +15,7 @@
 | 想立即构建 | Actions → `Build G68-PLUS (iStoreOS style)` → **Run workflow**（≈ 2.5 小时） |
 | 最近一次成功构建 | [run #42186516665](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42186516665) · commit `c6b3a90d` · 4 小时 09 分 |
 | 最近一次发布 | [g68-plus-2026.11.06](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.06)（含 shadowsocks-rust，167 MB） |
-| 当前仓库配置 | 已关闭 `shadowsocks-rust`（省约 2 小时）· **`rootfs` 2048 MiB + `rootfs_data` 4096 MiB** · 22 个 iStoreOS 风格包 + samba4 + docker 引擎 |
+| 当前仓库配置 | 已关闭 `shadowsocks-rust`（省约 2 小时）· **`rootfs` 512 MiB（只放 squashfs）+ `rootfs_data` 4096 MiB（docker/iStore）** · 22 个 iStoreOS 风格包 + samba4 + docker 引擎 |
 | 下次构建预期 | ≈ 2.5 小时；成功后自动发布 `g68-plus-2026.11.09` Release（免登录直链） |
 | 构建失败 | 自动开 Issue：标题 `CI 构建失败: … #<run>`，正文含失败步骤、run 链接与排查指引；同类未关闭则追加评论 |
 | 详细步骤 | [docs/build-guide.md](docs/build-guide.md)（触发方式 / 22 步流程 / 失败速查表 / 12 条注意事项） |
@@ -76,10 +76,11 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 | --- | --- | --- |
 | `defconfig` | `defconfig/g68-plus-docker.config` | 基础配置（换机型就改这个） |
 | `extra_config` | `defconfig/g68-plus-istoreos.config` | 附加差异项（iStoreOS 插件等） |
-| `rootfs_size` | `2048` | 只读系统分区（构建时打进固件的包在这，会覆盖 defconfig 的值） |
+| `rootfs_size` | `512` | 只读系统分区，只决定「编译时打进去的 squashfs 能否放下」；当前 squashfs 约 150–180 MB，512 有约 3 倍余量。改大只增加镜像体积，运行期不能写入 |
 | `rootfs_data_size` | `4096` | 可写 overlay：iStore/opkg 装的包、docker 数据、配置改动（脚本 `gen_image_generic.sh` 读取 `ROOTFS_DATA_PARTSIZE`） |
 
-分区布局：`kernel 16 MiB + rootfs 2048 MiB + rootfs_data 4096 MiB`，整盘镜像约 6.1 GiB，介质建议 ≥8 GB。
+分区布局：`kernel 16 MiB + rootfs 512 MiB + rootfs_data 4096 MiB`，整盘镜像约 4.6 GiB，介质建议 ≥8 GB（8 GB 卡可用）。
+每次构建会在 Job Summary 里输出 squashfs 实际占用率，超过 85% 会告警提示调大 `rootfs_size`。
 | `upload_artifacts` | `true` | 上传 artifact（15 天） |
 | `publish_release` | `true` | 成功后自动发布 Release |
 

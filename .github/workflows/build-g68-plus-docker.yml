@@ -41,9 +41,9 @@ on:
         required: false
         default: defconfig/g68-plus-istoreos.config
       rootfs_size:
-        description: "rootfs 分区(只读系统分区, 构建时打包的包在这)MB"
+        description: "rootfs 分区(只读系统分区, 只放编译时打包的 squashfs)MB"
         required: true
-        default: "2048"
+        default: "512"
       rootfs_data_size:
         description: "rootfs_data 分区(可写 overlay: iStore/opkg 装包、docker 数据、配置)MB"
         required: true
@@ -89,7 +89,7 @@ env:
   CONFIG_FILE: ${{ github.event.inputs.defconfig || 'defconfig/g68-plus-docker.config' }}
   EXTRA_CONFIG: ${{ github.event.inputs.extra_config || 'defconfig/g68-plus-istoreos.config' }}
   # 注意: 该值会在「应用 defconfig 与附加配置」步骤里覆盖 defconfig 中的 CONFIG_TARGET_ROOTFS_PARTSIZE
-  ROOTFS_SIZE: ${{ github.event.inputs.rootfs_size || '2048' }}
+  ROOTFS_SIZE: ${{ github.event.inputs.rootfs_size || '512' }}
   # rootfs_data 大小(传给 scripts/gen_image_generic.sh, 它读这个环境变量)
   ROOTFS_DATA_PARTSIZE: ${{ github.event.inputs.rootfs_data_size || '4096' }}
   CCACHE_MAXSIZE: 2G
@@ -382,6 +382,32 @@ jobs:
       # ---------------------------------------------------------------------
       # 5. 产物收集与上传
       # ---------------------------------------------------------------------
+      - name: 记录 rootfs 占用 (squashfs 实际大小)
+        run: |
+          set -e
+          SQ=$(ls build_dir/*/linux-*/root.squashfs 2>/dev/null | head -1 || true)
+          if [ -z "${SQ:-}" ]; then
+            echo "::warning::找不到 root.squashfs, 跳过占用统计"
+            exit 0
+          fi
+          B=$(stat -c%s "$SQ")
+          PART=$(( ${ROOTFS_SIZE} * 1024 * 1024 ))
+          PCT=$(( B * 100 / PART ))
+          echo "squashfs: $SQ"
+          echo "实际大小: $(( B / 1024 / 1024 )) MiB | rootfs 分区: ${ROOTFS_SIZE} MiB | 占用 ${PCT}%"
+          {
+            echo "### rootfs 占用"
+            echo ""
+            echo "| 项目 | 值 |"
+            echo "| --- | --- |"
+            echo "| squashfs 实际大小 | $(( B / 1024 / 1024 )) MiB |"
+            echo "| rootfs 分区 | ${ROOTFS_SIZE} MiB |"
+            echo "| 占用率 | ${PCT}% |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$PCT" -ge 85 ]; then
+            echo "::warning::squashfs 已占 rootfs 分区的 ${PCT}%, 建议把 rootfs_size 调大 (例如 ${ROOTFS_SIZE} -> 1024)"
+          fi
+
       - name: 校验镜像分区表
         run: |
           set -e
