@@ -275,33 +275,26 @@ jobs:
             echo "::warning::有 ${bad} 个源码包下载失败, 编译阶段可能报错 (见 download.log)"
           fi
 
-      - name: 修复 rust 源码包 (vendor 校验兜底)
+      - name: 解包 rust 源码并修复 vendor 校验
         run: |
-          set -euo pipefail
-          # 注意: make download 不处理 host-only 包(lang/rust 是 PKG_HOST_ONLY),
-          # 所以这里按 feeds 里的 PKG_VERSION 自己取源码包
-          RMK=feeds/packages/lang/rust/Makefile
-          if [ ! -f "$RMK" ]; then
-            echo "::warning::未找到 $RMK, 跳过兜底步骤"
-            exit 0
+          set -o pipefail
+          RUST_TARGET=package/feeds/packages/rust/host/compile
+          # 第一次调用只为了触发解包: checksum 问题会在 1 分钟内失败, 属预期
+          make -j2 "$RUST_TARGET" 2>&1 | tee rust-host.log || true
+          D=$(ls -d build_dir/*/host/rustc-*-src 2>/dev/null | head -1 || true)
+          if [ -z "${D:-}" ]; then
+            echo "::error::rust 源码未解包, 找不到 build_dir/*/host/rustc-*-src"
+            exit 1
           fi
-          VER=$(sed -n 's/^PKG_VERSION:=//p' "$RMK" | head -1 | tr -d ' \r')
-          T="dl/rustc-${VER}-src.tar.xz"
-          if [ ! -f "$T" ]; then
-            echo "下载 rustc-${VER}-src.tar.xz (约 250MB) ..."
-            curl -fSL --retry 3 --max-time 1800 -o "$T" \
-              "https://static.rust-lang.org/dist/rustc-${VER}-src.tar.xz" \
-              || { echo "::warning::rust 源码包下载失败, 跳过兜底"; rm -f "$T"; exit 0; }
-          fi
-          echo "rust 源码包: $T ($(du -h "$T" | cut -f1))"
-          WORK=$(mktemp -d)
-          tar -xf "$T" -C "$WORK"
-          python3 - "$WORK" <<'PY'
+          echo "== 源码树: $D"
+          echo "== vendor 内 Cargo.toml.orig 数量: $(find "$D/vendor" -maxdepth 3 -name 'Cargo.toml.orig' 2>/dev/null | wc -l)"
+          echo "== cc-1.2.28 目录:"; ls -la "$D/vendor/cc-1.2.28" 2>/dev/null | head -12 || true
+          python3 - "$D" <<'PY'
           import glob, json, os, sys
           root = sys.argv[1]
           crates = fixed = 0
           samples = []
-          for cs in sorted(glob.glob(os.path.join(root, '**', '.cargo-checksum.json'), recursive=True)):
+          for cs in sorted(glob.glob(os.path.join(root, 'vendor', '*', '.cargo-checksum.json'))):
               crates += 1
               d = os.path.dirname(cs)
               try:
@@ -318,41 +311,21 @@ jobs:
               data['files'] = files
               with open(cs, 'w') as fh:
                   json.dump(data, fh, separators=(',', ':'))
-              if len(samples) < 8:
+              if len(samples) < 10:
                   samples.append(os.path.basename(d) + ' -> ' + ', '.join(missing[:3]))
-          print('vendor 包数: %d, 修正缺失条目: %d' % (crates, fixed))
+          print('解包后 vendor 包数: %d, 清理缺失条目: %d' % (crates, fixed))
           for s in samples:
               print('  -', s)
-          with open(os.path.join(root, '.fixed_count'), 'w') as fh:
-              fh.write(str(fixed))
           PY
-          if [ "$(cat "$WORK/.fixed_count" 2>/dev/null || echo 0)" = "0" ]; then
-            echo "vendor 校验无缺失条目, 保持原包不动"
-            rm -rf "$WORK"
-            exit 0
-          fi
-          TOP=$(ls "$WORK" | grep -v '^\.fixed_count$')
-          NAME=$(basename "$T")
-          ( cd "$WORK" && XZ_OPT='-T0' tar -cJf "/tmp/$NAME" "$TOP" )
-          mv -f "/tmp/$NAME" "$T"
-          NEW=$(sha256sum "$T" | cut -d' ' -f1)
-          sed -i "s|^PKG_HASH:=.*|PKG_HASH:=$NEW|" "$RMK"
-          echo "重打包完成, 更新 PKG_HASH: $NEW"
-          if tar -tJf "$T" | grep -q 'cc-.*/Cargo.toml.orig'; then
-            echo "包内仍有 Cargo.toml.orig"
-          else
-            echo "已确认: cc-*/Cargo.toml.orig 不在包内, 对应校验条目已移除"
-          fi
-          rm -rf "$WORK"
 
-      - name: 预编译 rust host (提前暴露 rust 问题)
+      - name: 预编译 rust host
         run: |
           set -o pipefail
-          if make -j2 package/feeds/packages/rust/host/compile 2>&1 | tee rust-host.log; then
+          if make -j2 package/feeds/packages/rust/host/compile 2>&1 | tee -a rust-host.log; then
             echo "rust host 预编译通过"
             exit 0
           fi
-          echo "::warning::rust host 预编译失败, 用 V=s 重跑以拿到完整报错"
+          echo "::warning::rust host 预编译失败, 用 V=s 重跑取完整报错"
           timeout 1200 make -j1 V=s package/feeds/packages/rust/host/compile 2>&1 | tee -a rust-host.log || true
           exit 1
 
