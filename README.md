@@ -83,9 +83,9 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 > 指到外挂盘（`<挂载点>/docker`，要求剩余 ≥8 GiB 的 ext4/btrfs/xfs/f2fs）；没有外挂盘时保持 `/opt/docker`。
 > 手工设置过 `data_root` 则不再自动改动。
 >
-> 另外镜像内置 `/etc/init.d/docker-disk`：**首次启动**会把 eMMC 上镜像之外的剩余空间（≥16 GiB 时）
-> 追加成独立分区、格式化为 ext4（卷标 `docker_data`）、挂到 `/mnt/data` 并把 docker 根目录指向 `/mnt/data/docker`。
-> 幂等、失败自动回退 `/opt/docker`；关闭方式 `touch /etc/.docker-disk.done`。详见 build-guide 7.8。
+> 另外镜像内置 `/etc/init.d/docker-disk`：**首次启动**会把 eMMC 上镜像之外的剩余空间（≥28 GiB 时）拆成两块——
+> **20 GiB ext4（卷标 `ext_relay`）挂 `/mnt/ext_relay` 给 docker**，其余 ext4（卷标 `Data`）挂 `/mnt/data` 作共享盘；
+> 幂等、只追加不改动已有分区、失败自动回退 `/opt/docker`；关闭方式 `touch /etc/.docker-disk.done`。详见 build-guide 7.8。
 
 分区布局：`kernel 16 MiB + rootfs 512 MiB + rootfs_data 4096 MiB`，整盘镜像约 4.6 GiB，介质建议 ≥8 GB（8 GB 卡可用）。
 每次构建会在 Job Summary 里输出 squashfs 实际占用率，超过 85% 会告警提示调大 `rootfs_size`。

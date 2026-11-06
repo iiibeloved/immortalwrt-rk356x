@@ -1,17 +1,23 @@
 #!/bin/sh /etc/rc.common
 # =============================================================================
-#  首次启动: 把 eMMC/SD 上「镜像之外的剩余空间」建成独立分区, 格式化并挂到
-#  /mnt/data, 再把 dockerd 的数据目录指到 /mnt/data/docker。
+#  首次启动: 把镜像之外的剩余空间拆成两块, 自动格式化并挂载
 #
-#  安全性:
-#    * 只在最后一个分区之后的空闲区域追加分区, 绝不改动已有 p1~p3
-#    * 剩余空间 < 16 GiB 时什么都不做(小卡/已分区设备)
-#    * 已存在标签为 docker_data 的分区时只挂载, 不重新格式化
-#    * 任何一步失败都打日志并退出, 保留默认 /opt/docker, 不会让系统起不来
+#    p5 (逻辑, 20 GiB)  ext4  LABEL=ext_relay  -> /mnt/ext_relay  docker 数据目录
+#    p6 (逻辑, 其余)    ext4  LABEL=Data       -> /mnt/data       共享盘
+#
+#  MBR 约束: 镜像已用 3 个主分区(kernel/rootfs/rootfs_data), 主分区只剩 1 个槽位,
+#  因此两块新盘放在一个扩展分区(p4)里的两个逻辑分区(p5/p6)。
+#
+#  安全:
+#    * 只从最后一个分区的末尾往后追加, 绝不动 p1~p3
+#    * 剩余空间 < 28 GiB 时不动作(小卡/已分区设备)
+#    * 已存在 LABEL=ext_relay / LABEL=Data 的分区时只挂载, 不重新格式化
+#    * 任一步失败都打日志并保留默认 /opt/docker, 不影响开机
 #    * 成功后写 /etc/.docker-disk.done, 之后不再执行
 #
-#  关闭方式: 删除本文件, 或先 touch /etc/.docker-disk.done
-#  手动执行: /etc/init.d/docker-disk start   (日志 /etc/.docker-disk.log)
+#  开关:  touch /etc/.docker-disk.done 即关闭
+#  重跑:  rm -f /etc/.docker-disk.done && /etc/init.d/docker-disk start
+#  日志:  /etc/.docker-disk.log ; logread | grep docker-disk
 # =============================================================================
 
 START=58           # 早于 docker-dataroot(60) 与 dockerd(99)
@@ -19,16 +25,19 @@ STOP=10
 
 : "${MARKER:=/etc/.docker-disk.done}"
 : "${LOG:=/etc/.docker-disk.log}"
-LABEL="${LABEL:-docker_data}"
-: "${MP:=/mnt/data}"
-MIN_FREE_MIB=16384          # 至少 16 GiB 才动手
+: "${BLOCKDIR:=/sys/class/block}"
+: "${MOUNTS:=/proc/mounts}"
 DRYRUN="${DOCKER_DISK_DRYRUN:-0}"
-BLOCKDIR="${BLOCKDIR:-/sys/class/block}"   # 便于测试时注入假 sysfs
-MOUNTS="${MOUNTS:-/proc/mounts}"
+
+DOCKER_MIB=20480            # 20 GiB 给 docker
+DOCKER_LABEL=ext_relay
+DOCKER_MP=/mnt/ext_relay
+DATA_LABEL=Data
+DATA_MP=/mnt/data
+MIN_FREE_MIB=28672          # 20 GiB + 至少 8 GiB 给 Data 才动手
 
 log() { echo "$(date '+%F %T') $*" >> "$LOG"; logger -t docker-disk "$*" 2>/dev/null; }
 
-# /rom 所在分区的父设备(即启动盘)
 boot_disk() {
 	local part
 	part=$(awk '$2 == "/rom" {print $1; exit}' "$MOUNTS")
@@ -40,7 +49,7 @@ boot_disk() {
 disk_size_bytes() { echo $(( $(cat "$BLOCKDIR/$1/size") * 512 )); }
 
 last_part_end_bytes() {
-	local d="$1" max=0 p sz
+	local d="$1" max=0 p sz start end
 	for p in "$BLOCKDIR/$d"/*/partition; do
 		[ -e "$p" ] || continue
 		sz=$(cat "${p%/partition}/size")
@@ -51,37 +60,49 @@ last_part_end_bytes() {
 	echo "$max"
 }
 
-next_part_no() {
-	local d="$1" max=0 p n
-	for p in "$BLOCKDIR/$d"/*/partition; do
-		[ -e "$p" ] || continue
-		n=$(cat "$p")
-		[ "$n" -gt "$max" ] && max=$n
-	done
-	echo $((max + 1))
+disk_major() { cut -d: -f1 "$BLOCKDIR/$1/dev"; }
+
+label_of() { blkid 2>/dev/null | awk -v l="LABEL=\"$1\"" 'index($0, l) {print $1; exit}'; }
+uuid_of()  { blkid "$1" 2>/dev/null | sed -n 's/.* UUID="\([^"]*\)".*/\1/p'; }
+
+mknode() {   # $1=devname  $2=minor
+	local dev="/dev/$1"
+	[ -b "$dev" ] && return 0
+	[ "$DRYRUN" = "1" ] && { log "[dryrun] mknod $dev b $(disk_major "$DISK") $2"; return 0; }
+	mknod "$dev" b "$(disk_major "$DISK")" "$2" 2>>"$LOG"
 }
 
-existing_by_label() { blkid -t "LABEL=$LABEL" -o device 2>/dev/null | head -1; }
-
-ensure_mounted() {
-	local dev="$1"
-	mkdir -p "$MP"
-	mountpoint -q "$MP" && return 0
-	[ "$DRYRUN" = "1" ] && { log "[dryrun] mount $dev $MP"; return 0; }
-	mount -t ext4 "$dev" "$MP" || return 1
-}
-
-persist_fstab() {
-	local uuid="$1"
-	[ "$DRYRUN" = "1" ] && { log "[dryrun] fstab uuid=$uuid -> $MP"; return 0; }
-	uci -q delete fstab.@mount[-1] 2>/dev/null
-	uci -q add fstab mount >/dev/null || return 1
-	uci -q set fstab.@mount[-1].uuid="$uuid"
-	uci -q set fstab.@mount[-1].target="$MP"
-	uci -q set fstab.@mount[-1].fstype="ext4"
-	uci -q set fstab.@mount[-1].options="noatime"
-	uci -q set fstab.@mount[-1].enabled="1"
-	uci -q commit fstab
+fmt_mount() {   # $1=devname  $2=minor  $3=label  $4=mountpoint  $5=docker?
+	local dev="/dev/$1" uuid
+	mknode "$1" "$2" || { log "mknod $1 失败"; return 1; }
+	if [ "$DRYRUN" = "1" ]; then
+		log "[dryrun] mkfs.ext4 -F -m 0 -L $3 $dev ; mount $dev $4"
+	else
+		mkfs.ext4 -F -m 0 -L "$3" -E lazy_itable_init=1,discard "$dev" >>"$LOG" 2>&1 \
+			|| mkfs.ext4 -F -m 0 -L "$3" "$dev" >>"$LOG" 2>&1 \
+			|| { log "格式化 $dev 失败"; return 1; }
+	fi
+	[ "$DRYRUN" = "1" ] || mkdir -p "$4"
+	if [ "$DRYRUN" != "1" ]; then
+		mountpoint -q "$4" || mount -t ext4 "$dev" "$4" || { log "挂载 $dev -> $4 失败"; return 1; }
+	fi
+	uuid=$(uuid_of "$dev")
+	[ -n "$uuid" ] || uuid=""
+	if [ "$DRYRUN" = "1" ]; then
+		log "[dryrun] fstab uuid=${uuid:-?} -> $4"
+	else
+		uci -q add fstab mount >/dev/null
+		uci -q set "fstab.@mount[-1].uuid=$uuid"
+		uci -q set "fstab.@mount[-1].target=$4"
+		uci -q set "fstab.@mount[-1].fstype=ext4"
+		uci -q set "fstab.@mount[-1].options=noatime"
+		uci -q set "fstab.@mount[-1].enabled=1"
+		uci -q commit fstab
+	fi
+	if [ "$5" = "docker" ]; then
+		[ "$DRYRUN" = "1" ] || mkdir -p "$4/docker"
+	fi
+	return 0
 }
 
 set_docker_root() {
@@ -91,81 +112,68 @@ set_docker_root() {
 		""|"/opt/docker"|"/opt/docker/") ;;
 		*) log "data_root 已是 $cur (手工设置), 不改"; return 0 ;;
 	esac
-	mkdir -p "$MP/docker"
-	[ "$DRYRUN" = "1" ] && { log "[dryrun] dockerd.data_root=$MP/docker"; return 0; }
-	uci -q set dockerd.globals.data_root="$MP/docker"
+	[ "$DRYRUN" = "1" ] || ln -sfn "$DOCKER_MP/docker" /opt/docker 2>/dev/null
+	if [ "$DRYRUN" = "1" ]; then
+		log "[dryrun] dockerd.data_root=$DOCKER_MP/docker"
+		return 0
+	fi
+	uci -q set dockerd.globals.data_root="$DOCKER_MP/docker"
 	uci -q commit dockerd
 	/etc/init.d/dockerd restart >/dev/null 2>&1
-	log "dockerd data_root -> $MP/docker"
+	log "dockerd data_root -> $DOCKER_MP/docker"
 }
 
 start() {
 	[ -f "$MARKER" ] && return 0
 	[ "$DRYRUN" != "1" ] && touch "$MARKER"
 
-	local d dev size end free_mib part_no major minor base_minor newdev uuid
-	d=$(boot_disk 2>/dev/null || true)
-	[ -n "$d" ] || d="${BOOT_DISK:-}"
-	[ -n "$d" ] || { log "找不到启动盘, 跳过"; return 0; }
-	size=$(disk_size_bytes "$d")
-	end=$(last_part_end_bytes "$d")
-	free_mib=$(( (size - end) / 1048576 ))
-	log "启动盘 /dev/$d 总 $((size/1073741824)) GiB, 已用到 $((end/1073741824)) GiB, 剩余 ${free_mib} MiB"
+	DISK=$(boot_disk 2>/dev/null || true)
+	[ -n "$DISK" ] || DISK="${BOOT_DISK:-}"
+	[ -n "$DISK" ] || { log "找不到启动盘, 跳过"; return 0; }
 
-	# 已存在 docker_data 分区: 只挂载
-	dev=$(existing_by_label)
-	if [ -n "$dev" ]; then
-		log "已存在 LABEL=$LABEL 的分区: $dev"
-		ensure_mounted "$dev" || { log "挂载失败, 保留默认 data_root"; return 0; }
-		uuid=$(blkid -s UUID -o value "$dev" 2>/dev/null)
-		[ -n "$uuid" ] && persist_fstab "$uuid"
+	local size end free_mib start_mib dev
+
+	# 已存在两块盘: 只挂载
+	if [ -n "$(label_of "$DOCKER_LABEL")" ] && [ -n "$(label_of "$DATA_LABEL")" ]; then
+		log "已存在 LABEL=$DOCKER_LABEL / $DATA_LABEL, 只挂载"
+		dev=$(label_of "$DOCKER_LABEL"); [ "$DRYRUN" = "1" ] || mkdir -p "$DOCKER_MP"
+		[ "$DRYRUN" = "1" ] || { mountpoint -q "$DOCKER_MP" || mount -t ext4 "$dev" "$DOCKER_MP"; }
+		dev=$(label_of "$DATA_LABEL"); [ "$DRYRUN" = "1" ] || mkdir -p "$DATA_MP"
+		[ "$DRYRUN" = "1" ] || { mountpoint -q "$DATA_MP" || mount -t ext4 "$dev" "$DATA_MP"; }
 		set_docker_root
 		return 0
 	fi
 
+	size=$(disk_size_bytes "$DISK")
+	end=$(last_part_end_bytes "$DISK")
+	free_mib=$(( (size - end) / 1048576 ))
+	log "启动盘 /dev/$DISK 总 $((size/1073741824)) GiB, 已用 $((end/1073741824)) GiB, 剩余 ${free_mib} MiB"
+
 	if [ "$free_mib" -lt "$MIN_FREE_MIB" ]; then
-		log "剩余空间不足 ${MIN_FREE_MIB} MiB, 不建分区"
+		log "剩余不足 ${MIN_FREE_MIB} MiB (需 20 GiB docker + 8 GiB Data), 不建分区"
 		return 0
 	fi
 
-	part_no=$(next_part_no "$d")
-	newdev="/dev/${d}p${part_no}"
-	log "在 /dev/$d 追加分区 p${part_no} (起始 0x$(printf %x "$end") 字节, 到盘尾)"
+	start_mib=$(( (end + 1048575) / 1048576 + 1 ))     # 向上取整到 MiB +1 对齐
 
 	if [ "$DRYRUN" = "1" ]; then
-		log "[dryrun] parted -s /dev/$d mkpart primary ext4 ${end}B 100%"
+		log "[dryrun] parted -s /dev/$DISK unit MiB mkpart extended ${start_mib} 100%"
+		log "[dryrun] parted -s /dev/$DISK unit MiB mkpart logical ext4 ${start_mib} $((start_mib + DOCKER_MIB - 1))MiB"
+		log "[dryrun] parted -s /dev/$DISK unit MiB mkpart logical ext4 $((start_mib + DOCKER_MIB)) 100%"
 	else
-		parted -s "/dev/$d" unit B mkpart primary ext4 "${end}B" 100% >>"$LOG" 2>&1 \
-			|| { log "parted 创建分区失败, 放弃"; return 0; }
+		parted -s "/dev/$DISK" unit MiB mkpart extended "${start_mib}MiB" 100% >>"$LOG" 2>&1 \
+			|| { log "创建扩展分区失败, 放弃"; return 0; }
+		parted -s "/dev/$DISK" unit MiB mkpart logical ext4 "${start_mib}MiB" "$((start_mib + DOCKER_MIB - 1))MiB" >>"$LOG" 2>&1 \
+			|| { log "创建 docker 逻辑分区失败, 放弃"; return 0; }
+		parted -s "/dev/$DISK" unit MiB mkpart logical ext4 "$((start_mib + DOCKER_MIB))MiB" 100% >>"$LOG" 2>&1 \
+			|| { log "创建 Data 逻辑分区失败, 放弃"; return 0; }
 	fi
 
-	# 在线新增分区: 内核不会立即解析新表, 用 mknod 造设备节点(重启后自动出现)
-	base_minor=$(cat "$BLOCKDIR/$d/dev" | cut -d: -f1)
-	case "$d" in
-		mmcblk*|nvme*) major=$(cut -d: -f1 "$BLOCKDIR/$d/dev"); minor=$part_no ;;
-		*) major=$(cut -d: -f1 "$BLOCKDIR/$d/dev"); minor=$(cut -d: -f2 "$BLOCKDIR/$d/dev"); minor=$((minor + part_no)) ;;
-	esac
-	if [ "$DRYRUN" != "1" ] && [ ! -b "$newdev" ]; then
-		mknod "$newdev" b "$major" "$minor" 2>>"$LOG" || log "mknod $newdev 失败(major=$major minor=$minor)"
-	fi
-
-	if [ "$DRYRUN" = "1" ]; then
-		log "[dryrun] mkfs.ext4 -F -L $LABEL $newdev"
-	else
-		if ! mkfs.ext4 -F -m 0 -L "$LABEL" -E lazy_itable_init=1,discard "$newdev" >>"$LOG" 2>&1; then
-			if ! mkfs.ext4 -F -m 0 -L "$LABEL" "$newdev" >>"$LOG" 2>&1; then
-				log "格式化失败, 放弃(分区已创建, 下次启动会重试挂载/格式化)"
-				rm -f "$MARKER"
-				return 0
-			fi
-		fi
-	fi
-
-	ensure_mounted "$newdev" || { log "挂载 $newdev 失败"; rm -f "$MARKER"; return 0; }
-	uuid=$(blkid -s UUID -o value "$newdev" 2>/dev/null)
-	[ -n "$uuid" ] && persist_fstab "$uuid"
+	# MBR 逻辑分区从 5 号开始
+	fmt_mount "${DISK}p5" 5 "$DOCKER_LABEL" "$DOCKER_MP" docker || { rm -f "$MARKER"; return 0; }
+	fmt_mount "${DISK}p6" 6 "$DATA_LABEL"   "$DATA_MP"   || { rm -f "$MARKER"; return 0; }
 	set_docker_root
-	log "完成: $newdev -> $MP (docker: $MP/docker)"
+	log "完成: ${DISK}p5($DOCKER_LABEL) -> $DOCKER_MP, ${DISK}p6($DATA_LABEL) -> $DATA_MP"
 }
 
 stop() { :; }
