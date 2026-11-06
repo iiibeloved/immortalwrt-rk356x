@@ -299,7 +299,42 @@ uci commit dockerd && /etc/init.d/dockerd restart
 
 判断条件：只要 `data_root` 不是 `/opt/docker`，且不等于标记文件里记录的「脚本上次设的值」，就视为手工设置。
 
-### 7.7 回滚 / 删除发布
+### 7.8 首次启动自动把剩余空间做成 docker 分区（256G eMMC 场景）
+
+镜像只占约 **4.6 GiB**（kernel 16 + rootfs 512 + rootfs_data 4096 MiB），256 GB 的 eMMC 有约 250 GB 未分配。
+固件内置 `/etc/init.d/docker-disk`（START=58），**首次启动**时自动：
+
+1. 通过 `/rom` 找到启动盘（如 `/dev/mmcblk0`）；
+2. 若最后分区之后的未分配空间 ≥ 16 GiB，用 `parted` 追加一个分区（p4，只追加、绝不改动 p1–p3）；
+3. 格式化为 ext4，卷标 `docker_data`（`mkfs.ext4 -m 0 -E lazy_itable_init=1,discard`）；
+4. 挂到 `/mnt/data`，并写入 fstab（按 **UUID**，之后每次开机自动挂载）；
+5. 把 `dockerd.globals.data_root` 设为 `/mnt/data/docker` 并重启 docker。
+
+| 安全性 | 说明 |
+| --- | --- |
+| 幂等 | 已存在 `LABEL=docker_data` 的分区时只挂载，**不重新格式化** |
+| 失败兜底 | 任一步失败都打日志并保留默认 `/opt/docker`，不影响系统启动 |
+| 只跑一次 | 成功后写 `/etc/.docker-disk.done`，之后不再执行 |
+| 小盘保护 | 未分配空间 < 16 GiB 直接跳过（小卡、已分区设备） |
+| 分区上限 | MBR 最多 4 个主分区；本镜像用 3 个，正好剩 p4；若已满则失败并保留默认 |
+
+开关与排错：
+
+```sh
+# 关闭（刷机后执行，或提前写进镜像）
+touch /etc/.docker-disk.done
+
+# 手动重跑（会重新判断剩余空间）
+rm -f /etc/.docker-disk.done && /etc/init.d/docker-disk start
+
+# 日志
+cat /etc/.docker-disk.log ; logread | grep docker-disk
+```
+
+**已知细节**：在线新增分区时内核不会立刻解析新分区表，脚本会用 `mknod` 造出 `/dev/mmcblk0p4` 先把文件系统挂上；
+重启后内核正常识别，之后的挂载都走 fstab + UUID，无需再 mknod。
+
+### 7.9 回滚 / 删除发布
 
 ```bash
 gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cleanup-tag
