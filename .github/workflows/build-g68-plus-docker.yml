@@ -232,6 +232,20 @@ jobs:
           # 归一化: 补齐依赖、丢弃不存在的符号 (未知符号在这里被静默移除)
           make defconfig
 
+          # 强制关闭项: 附加配置里的 "# CONFIG_PACKAGE_x is not set" 单独再压一次,
+          # 避免 kconfig 归一化时被依赖/默认值重新拉回 =y (实测踩过: ss-rust 仍被编译)
+          if [ -n "${EXTRA_CONFIG:-}" ] && [ -f "$EXTRA_CONFIG" ]; then
+            OFF=$(grep -oE '^# CONFIG_PACKAGE_[A-Za-z0-9_.+-]+ is not set$' "$EXTRA_CONFIG" \
+                  | sed -e 's/^# CONFIG_PACKAGE_//' -e 's/ is not set$//' || true)
+            if [ -n "$OFF" ]; then
+              echo "需要强制关闭: $OFF"
+              for p in $OFF; do
+                sed -i -E "s|^CONFIG_PACKAGE_${p}=.*|# CONFIG_PACKAGE_${p} is not set|" .config
+              done
+              make defconfig
+            fi
+          fi
+
           echo "---- 生效目标 ----"
           grep -E '^CONFIG_TARGET_(BOARD|SUBTARGET|PROFILE|ARCH_PACKAGES|ROOTFS_PARTSIZE)=' .config
           echo "---- 已启用包数: $(grep -c '^CONFIG_PACKAGE_.*=y$' .config) ----"
