@@ -41,9 +41,9 @@ on:
         required: false
         default: defconfig/g68-plus-istoreos.config
       rootfs_size:
-        description: "rootfs 分区(只读系统分区, 只放编译时打包的 squashfs)MB"
+        description: "rootfs 分区(只读系统分区)MB — 默认 200, 与 fork 派生源 defconfig 保持一致"
         required: true
-        default: "512"
+        default: "200"
       rootfs_data_size:
         description: "rootfs_data 分区(可写 overlay: iStore/opkg 装包、docker 数据、配置)MB"
         required: true
@@ -89,7 +89,7 @@ env:
   CONFIG_FILE: ${{ github.event.inputs.defconfig || 'defconfig/g68-plus-docker.config' }}
   EXTRA_CONFIG: ${{ github.event.inputs.extra_config || 'defconfig/g68-plus-istoreos.config' }}
   # 注意: 该值会在「应用 defconfig 与附加配置」步骤里覆盖 defconfig 中的 CONFIG_TARGET_ROOTFS_PARTSIZE
-  ROOTFS_SIZE: ${{ github.event.inputs.rootfs_size || '512' }}
+  ROOTFS_SIZE: ${{ github.event.inputs.rootfs_size || '200' }}
   # rootfs_data 大小(传给 scripts/gen_image_generic.sh, 它读这个环境变量)
   ROOTFS_DATA_PARTSIZE: ${{ github.event.inputs.rootfs_data_size || '4096' }}
   CCACHE_MAXSIZE: 2G
