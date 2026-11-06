@@ -124,7 +124,7 @@ ls bin/targets/rockchip/armv8/
 - **`luci-app-filetransfer` 是个人维护的第三方单包**（MIT，依赖 `luci-compat`），若上游失效，
   工作流会告警并继续，固件仍然产出，只是少了该功能。
 - **rootfs 改为 4096 MB**（v3 起）：只影响只读 rootfs 分区；`rootfs_data` 在 `scripts/gen_image_generic.sh` 里写死 `USERDATASIZE=2048`，
-  因此整盘镜像约 4.6 GiB（boot 16 MiB + rootfs 512 MiB + rootfs_data 4096 MiB），
+  因此整盘镜像约 4.3 GiB（boot 16 MiB + rootfs 200 MiB + rootfs_data 4096 MiB），
   artifact 上传时间增加；若只想最小镜像，把 `rootfs_size` 输入改回 `200`。
 - **iStore 商店与 quickstart 的面板依赖 LuCI 前端能力**，在 24.10（Lua LuCI）上属“社区常用组合”，
   首次刷机后请实际打开 `系统 → 快速配置`、`iStore`、`网络存储 → 共享` 三项确认可用，再决定是否长期跟进。
