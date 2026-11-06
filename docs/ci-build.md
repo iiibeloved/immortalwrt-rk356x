@@ -180,14 +180,16 @@ d4a1908a71dc8b7977eb626b07b0f291b575cc35b3958757b58aaec56eeba41d
 
 ### 维护建议
 
-- **rust 不享受 ccache**：`cargo` 编译不走 ccache，所以每次全新构建都会重编 rustc + LLVM，
-  稳定占用 ~2 小时。若不需要 `shadowsocks-rust`，在 `defconfig/g68-plus-istoreos.config` 追加：
+- **rust 已默认关闭**：`shadowsocks-rust-sslocal/ssserver` 在附加配置里被显式设为 `is not set`，
+  workflow 的 rust 步骤会检测到「config 里没有 rust 组件」后自动跳过（省 ~2 小时，构建约 2.5 小时）。
+  需要 ss 客户端/服务端时，删掉 `defconfig/g68-plus-istoreos.config` 里的这两行：
 
   ```
   # CONFIG_PACKAGE_shadowsocks-rust-sslocal is not set
   # CONFIG_PACKAGE_shadowsocks-rust-ssserver is not set
   ```
 
-  构建时间可直接砍到 ~2 小时；其余 20 个 iStoreOS 相关包不受影响。
+  此时会自动回到「工具链 → 修 rust vendor → 编 rust」的路径（rustc + LLVM，约 +2 小时）。
+  其余 20 个 iStoreOS 相关包不受影响；校验步骤的表格里会显示 `⛔ 已按预期关闭` / `⚠️ 预期关闭但仍启用`。
 - `dl/` 与 `.ccache/` 已被 `actions/cache` 缓存，二次构建的下载与 C 编译会明显加快。
 - 定时任务每周一 02:00 会自动重编，用于跟踪 feeds / 插件更新。
