@@ -189,7 +189,9 @@ jobs:
 
           PKGS="quickstart luci-app-quickstart luci-app-store luci-lib-taskd luci-lib-xterm taskd \
                 unishare luci-app-unishare webdav2 luci-app-lucky lucky \
-                luci-app-wolplus luci-app-rtbwmon"
+                luci-app-wolplus luci-app-rtbwmon \
+                luci-app-homeassistant luci-app-eqosplus luci-app-timecontrol \
+                luci-app-control-webrestriction luci-app-control-weburl"
           for p in $PKGS; do
             if ./scripts/feeds install "$p"; then
               :

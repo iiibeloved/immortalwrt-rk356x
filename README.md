@@ -105,6 +105,9 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 - **Samba4**：`samba4-server` + `luci-app-samba4`
 - **Docker**：`dockerd` / `containerd` / `runc` / `docker`（原 defconfig 只有 dockerman 界面，已补齐引擎）
 - **代理组件**：`shadowsocks-rust-sslocal/ssserver`（默认启用；不想要可在附加配置里关闭，省约 2 小时）
+- **监控/管控**：`luci-app-nlbwmon`（流量）、`luci-app-eqosplus`（限速）、`luci-app-timecontrol`、`luci-app-control-webrestriction`、`luci-app-control-weburl`
+- **存储**：`luci-app-nfs` + `nfs-kernel-server`、`luci-app-cifs-mount` + `kmod-fs-cifs` + `cifs-utils`、`luci-app-diskman`（含 SMART 页签）
+- **Home Assistant**：`luci-app-homeassistant` + 中文语言包（Docker 方式，镜像首次启动拉取）
 - **软件源**：内置 `/etc/opkg/distfeeds.conf` —— ImmortalWrt 24.10.0（CERNET，6 源）+ **iStoreOS 官方仓库（store / nas_luci / nas，322 个包）**，刷完即可在「系统 → 软件包」安装；首次启动自动补 `arch aarch64_cortex-a53`、必要时自动关闭签名校验（日志 `/etc/opkg-boot.log`）；kmods 因自编内核 6.6.99 与官方 6.6.86 不匹配而未启用
 
 第三方源：`kenzok8/small-package`（只按名安装需要的包，避免与官方源同名冲突）、`DustReliant/luci-app-filetransfer`（本地单包引入）。

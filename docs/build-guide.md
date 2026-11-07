@@ -227,6 +227,10 @@ CONFIG_PACKAGE_luci-app-xxx=y                  # 加包
 - 包名必须是 feeds 里真实存在的符号，写错会被 `make defconfig` 静默丢弃；
   第 12 步会在 Job Summary 里标 `⚠️ 未启用` 并发出 warning，照着补即可。
 - 需要第三方源的包，要在 workflow 第 8 步的 `PKGS` 列表里加名字，否则构建时找不到包。
+  当前 `PKGS` 已包含：quickstart / luci-app-quickstart / luci-app-store / luci-lib-taskd / luci-lib-xterm / taskd /
+  unishare / luci-app-unishare / webdav2 / luci-app-lucky / lucky / luci-app-wolplus / luci-app-rtbwmon /
+  luci-app-homeassistant / luci-app-eqosplus / luci-app-timecontrol / luci-app-control-webrestriction / luci-app-control-weburl。
+- 官方 feed 里的包（`luci-app-nfs`、`luci-app-cifs-mount`、`luci-app-diskman`、`nfs-kernel-server`、`kmod-fs-cifs` 等）**不需要**加进 PKGS。
 - 改完 push（只改这个文件会触发构建）。
 
 ### 7.2 关闭 / 恢复 shadowsocks-rust（影响约 2 小时）
