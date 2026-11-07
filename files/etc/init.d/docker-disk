@@ -95,6 +95,8 @@ fmt_mount() {   # $1=devname  $2=minor  $3=label  $4=mountpoint  $5=docker?
 	[ -n "$uuid" ] || uuid=""
 	if [ "$DRYRUN" = "1" ]; then
 		log "[dryrun] fstab uuid=${uuid:-?} -> $4"
+	elif [ -n "$uuid" ] && uci -q show fstab 2>/dev/null | grep -q "\.uuid='$uuid'"; then
+		log "$4 已在 fstab 中(uuid=$uuid), 不重复写入"
 	else
 		uci -q add fstab mount >/dev/null
 		uci -q set "fstab.@mount[-1].uuid=$uuid"
@@ -188,11 +190,25 @@ start() {
 			|| { log "创建 Data 逻辑分区失败, 放弃"; return 0; }
 	fi
 
+	# 在线改分区表后内核通常不会立刻生成新分区节点(mknod 出来的节点无法 mkfs/mount),
+	# 检测不到就让系统重启一次; 下次开机走上面「已存在 p5/p6」的复用分支继续格式化。
+	if [ "$DRYRUN" != "1" ] && [ ! -e "$BLOCKDIR/${DISK}p5" ]; then
+		if [ -f /etc/.docker-disk.rebooted ]; then
+			log "重启后仍未识别 ${DISK}p5, 放弃自动处理(请手动 parted/mkfs 或反馈)"
+			return 0
+		fi
+		log "内核尚未识别新分区, 写入重启标记并重启一次(下次开机继续格式化)"
+		touch /etc/.docker-disk.rebooted
+		sync
+		reboot
+		return 0
+	fi
+
 	# MBR 逻辑分区从 5 号开始
 	fmt_mount "${DISK}p5" 5 "$DOCKER_LABEL" "$DOCKER_MP" docker || { rm -f "$MARKER"; return 0; }
 	fmt_mount "${DISK}p6" 6 "$DATA_LABEL"   "$DATA_MP"   || { rm -f "$MARKER"; return 0; }
 	set_docker_root
-	[ "$DRYRUN" = "1" ] || touch "$MARKER"
+	[ "$DRYRUN" = "1" ] || { touch "$MARKER"; rm -f /etc/.docker-disk.rebooted; }
 	log "完成: ${DISK}p5($DOCKER_LABEL) -> $DOCKER_MP, ${DISK}p6($DATA_LABEL) -> $DATA_MP"
 }
 
