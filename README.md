@@ -11,12 +11,12 @@
 
 | 项目 | 值 |
 | --- | --- |
-| **下次构建** | **2026-11-08 02:00（一次性基线构建）**，成功后自动发 Release；之后每周一 02:00 定时（cron `0 18 * * 0`）· 约 3.5–4 小时（含 ss-rust） |
+| **下次构建** | **2026-11-08 01:00（一次性基线构建）**，成功后自动发 Release；之后每周一 02:00 定时（cron `0 18 * * 0`）· 约 3.5–4 小时（含 ss-rust） |
 | 想立即构建 | Actions → `Build G68-PLUS (iStoreOS style)` → **Run workflow**（≈ 2.5 小时） |
 | 最近一次成功构建 | [run #42270932303](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42270932303)（2026-11-07 02:28 → 05:05，157 分钟） |
 | 最近一次发布 | [g68-plus-2026.11.07](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.07)（165.4 MB，分区 16/200/4096） |
 | 当前仓库配置 | **保留 `shadowsocks-rust`**（构建约 4 小时）· **`rootfs` 200 MiB（与 fork 一致）+ `rootfs_data` 4096 MiB** · 22 个 iStoreOS 风格包 + samba4 + docker 引擎 |
-| 下次构建预期 | 11-08 02:00 起约 3.5–4 小时（保留 ss-rust）→ 成功后自动发布 `g68-plus-2026.11.08` Release（免登录直链） |
+| 下次构建预期 | 11-08 01:00 起约 3.5–4 小时（保留 ss-rust）→ 成功后自动发布 `g68-plus-2026.11.08` Release（免登录直链） |
 | 构建失败 | 自动开 Issue：标题 `CI 构建失败: … #<run>`，正文含失败步骤、run 链接与排查指引；同类未关闭则追加评论 |
 | 详细步骤 | [docs/build-guide.md](docs/build-guide.md)（触发方式 / 24 步流程 / 失败速查表 / 注意事项） |
 | **基线** | 冻结于 `d83f4b52`（17 个文件指纹）· CI 强校验，偏离即构建失败 · 校验 `sha256sum -c docs/baseline.sha256` |

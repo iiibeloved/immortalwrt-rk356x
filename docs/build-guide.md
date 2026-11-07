@@ -11,7 +11,7 @@
 
 | 事项 | 值 |
 | --- | --- |
-| 下次自动构建 | **2026-11-09 02:00（周一，Asia/Shanghai）**，cron `0 18 * * 0`（UTC 周日 18:00） |
+| 下次构建 | **2026-11-08 01:00**（一次性 `0 17 7 11 *`）；之后每周一 02:00（cron `0 18 * * 0`） |
 | 想提前编 | Actions → `Build G68-PLUS (iStoreOS style)` → **Run workflow** |
 | 预计耗时 | **约 2.5 小时**（ss-rust 已关闭，rust 步骤自动跳过；开启 ss-rust 则约 4.2 小时） |
 | 单次超时上限 | 350 分钟（workflow 内 `timeout-minutes`，GitHub 硬上限 360） |
@@ -565,7 +565,7 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
 **要偏离基线时**（例如临时试别的 rootfs 大小），不要改默认值，直接 Run workflow 显式传参，
 构建产物会带 `-r<run_number>` 后缀，基线不受影响。
 
-**基线提交**：`d83f4b52`（含 LAN 改 192.168.100.1）；**基线指纹文件**：[`docs/baseline.sha256`](baseline.sha256)
+**基线提交**：`051846bb` 起（含 LAN 改 192.168.100.1）；**基线指纹文件**：[`docs/baseline.sha256`](baseline.sha256)
 （17 个文件：2 个 defconfig、2 个 workflow、`gen_image_generic.sh`、`files/` 全部脚本与配置）。校验方式：
 
 ```bash

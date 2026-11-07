@@ -3,7 +3,7 @@
 本清单由构建产物 `immortalwrt-rockchip-armv8-nsy_g68-plus.manifest` 直接生成（非手写）。
 
 - **上一版产物**：run [#42337188896](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42337188896) · Release [`g68-plus-2026.11.07-r12`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.07-r12) · **549 个包**
-- **下一次构建（2026-11-08 02:00）**：配置新增 `kmod-fs-f2fs` / `kmod-fs-xfs` / `kmod-fs-ntfs3`，预计 **552 个包**；
+- **下一次构建（2026-11-08 01:00）**：配置新增 `kmod-fs-f2fs` / `kmod-fs-xfs` / `kmod-fs-ntfs3`，预计 **552 个包**；
   成功发布后本文档会按新 manifest 刷新（届时包数、分类统计、指纹表同步更新）
 
 **当前配置为最终基线：此后定时构建与手动构建均基于此配置。**
@@ -13,7 +13,7 @@
 | 文件 | sha256 |
 | --- | --- |
 | `defconfig/g68-plus-istoreos.config` | `908855b1d006c80b759e9645068539e8ce265017c02d65cd008310201bc01b4e` |
-| `.github/workflows/build-g68-plus-docker.yml` | `3d05e23ff9df443c8accb581cbd46881814792228a4b49445769327f15568a85` |
+| `.github/workflows/build-g68-plus-docker.yml` | `ab6b05cf2a2d2ce5d0f1af7b010f1b4ab74cecd6cebb6f61e6bf7691bdf8c653` |
 | `scripts/gen_image_generic.sh` | `f6d59494a9c88f5fe4e2175f00067eb5b5160a32b903b0a16f726a7b99903e98` |
 | 固件镜像 `*.img.gz` | `0ecc1541a381669861c45f8a505d077e97a986697064a4ab5d8fddfc8d3a9e96` |
 
