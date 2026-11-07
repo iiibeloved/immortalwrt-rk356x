@@ -459,50 +459,37 @@ netstat -lntp | grep 7681        # 应看到 0.0.0.0:7681（而不是旧的 LAN 
 **安全提醒**：监听 `0.0.0.0` 只代表「不受网卡 IP 变化影响」，WAN 侧仍由防火墙默认策略拦截（没有放行 7681 的规则）；
 不要把 7681 加到 WAN 区域，也不要用 root 空密码。
 
-### 7.13 指示灯（电源灯 / 网口灯）开关
+### 7.13 指示灯（电源灯）开关
 
-先明确这台的硬件事实（查 `rk3568-nsy-g68-plus.dts` + 内核驱动得出）：
+查过 `rk3568-nsy-g68-plus.dts` 与内核驱动后确认这台机器的灯分两类：
 
 | 灯 | 由谁控制 | 软件能否开关 |
 | --- | --- | --- |
 | 前面板电源灯 `led-power`（GPIO0_C4） | 内核 `gpio-leds` → `/sys/class/leds/led-power` | ✅ 能 |
-| RJ45 网口灯（每个口的绿灯/黄灯） | **Realtek RTL8367S 交换芯片内部逻辑**（硬件行为） | ❌ 不能（见下） |
+| RJ45 网口灯 | **Realtek RTL8367S 交换芯片内部逻辑**（按链路/速率/活动自动驱动） | ❌ 不能 |
 
-内置 `/etc/config/portled` + `/etc/init.d/portled`（START=70），控制 GPIO 灯：
+网口灯不可控的原因：`rtl8367b` 驱动只暴露 `enable_vlan / enable_vlan4k / reset_mibs / max_length / reset_mib / mib / info`，
+没有任何 LED 属性（驱动里只有 `0x1b0e~0x1b10` 三个「LED 极性」寄存器，改的是高低电平有效，不是开关）。
+**该需求已确认放弃**，不再做驱动改造；确实嫌灯亮时，用物理遮挡，或对长期不用的口
+`swconfig dev switch0 port <n> set enable 0`（该口会同时断网）。
+
+内置 `/etc/config/portled` + `/etc/init.d/portled`（START=70）用于控制 GPIO 灯：
 
 ```sh
-# 关闭电源灯 + 所有可控 GPIO 灯
+# 关闭电源灯等所有可控 GPIO 灯
 uci set portled.main.enable=0
 uci commit portled
 /etc/init.d/portled restart
 
-# 只关电源灯（保留其它）
+# 只关电源灯
 uci set portled.main.power_led=0 && uci commit portled && /etc/init.d/portled restart
 
 # 恢复
-uci set portled.main.enable=1 && uci set portled.main.power_led=1 && uci commit portled
-/etc/init.d/portled restart
+uci set portled.main.enable=1 && uci set portled.main.power_led=1
+uci commit portled && /etc/init.d/portled restart
 ```
 
 日志：`/etc/portled.log`、`logread | grep portled`。
-
-**为什么网口灯关不掉**：这台的网口灯直接接在 RTL8367S 的 LED 引脚上，由芯片按链路/速率/活动状态自动驱动；
-内核里的 `rtl8367b` 驱动只暴露这些 swconfig 属性：
-
-```
-enable_vlan  enable_vlan4k  reset_mibs  max_length  reset_mib  mib  info
-```
-
-**没有 LED 相关属性**（驱动里只有 `0x1b0e~0x1b10` 三个「LED 极性」寄存器，只改高低电平有效，不是开关）。
-所以 `portled` 里的 `switch_leds` 只能写日志，实际无效。
-
-**如果一定要关网口灯**，可选路径（按代价从低到高）：
-
-1. **物理遮挡**（最省事，不影响任何功能）；
-2. **只在空闲口上关灯**：`swconfig dev switch0 port <n> set enable 0` —— 该口 LED 熄灭，但**这个口也随之断网**，只适合长期不用的口；
-3. **改驱动**（需要构建 + 在设备上试寄存器）：给 `rtl8367b.c` 加一个 swconfig 属性（如 `led_off`），
-   写 RTL8367S 的 LED Force 配置寄存器让所有口 LED 常灭。风险：寄存器定义需实测确认，
-   写错可能让灯行为异常（重启可恢复，不影响转发）。这条路要 1–2 次试验构建，我可以做，但要先确认你愿意接受折腾。
 
 ### 7.9 回滚 / 删除发布### 7.9 回滚 / 删除发布
 

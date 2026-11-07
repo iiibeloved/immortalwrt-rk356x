@@ -1,6 +1,6 @@
 #!/bin/sh /etc/rc.common
 # 按 /etc/config/portled 应用指示灯状态(GPIO 灯)。
-# RJ45 网口灯由 RTL8367S 硬件驱动, 本脚本仅在检测到驱动支持时尝试, 否则写日志。
+# RJ45 网口灯由 RTL8367S 硬件驱动, 软件无法控制, 本脚本不涉及。
 
 START=70
 STOP=10
@@ -25,31 +25,18 @@ apply_gpio() {   # $1=0 关闭  $2=1 点亮
 	log "GPIO 灯已设置为 $([ "$state" = "0" ] && echo 关闭 || echo 点亮)"
 }
 
-try_switch_leds() {   # $1=0/1, 仅在驱动支持 LED 属性时生效
-	local help
-	command -v swconfig >/dev/null 2>&1 || { log "无 swconfig, 跳过网口灯"; return 0; }
-	help=$(swconfig dev switch0 help 2>/dev/null)
-	if [ -n "$help" ] && echo "$help" | grep -qi 'led'; then
-		swconfig dev switch0 set led "$1" >/dev/null 2>&1 && log "已尝试设置网口灯=$1" || log "设置网口灯失败"
-	else
-		log "驱动未暴露 LED 属性, 网口灯由 RTL8367S 硬件决定(软件不可关)"
-	fi
-}
-
 start() {
-	local enable=1 power=1 sw=1
+	local enable=1 power=1
 	. /lib/functions.sh
 	config_load portled
 	config_get_bool enable main enable 1
 	config_get_bool power main power_led 1
-	config_get_bool sw main switch_leds 1
 
 	if [ "$enable" = "0" ] || [ "$power" = "0" ]; then
 		apply_gpio 0
 	else
 		apply_gpio 1
 	fi
-	try_switch_leds "$sw"
 }
 
 stop() { :; }

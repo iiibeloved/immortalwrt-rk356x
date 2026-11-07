@@ -5,8 +5,8 @@
 #    1) GPIO 灯: 只有前面板电源灯 led-power (GPIO0_C4), 由内核 gpio-leds 驱动,
 #       可通过 /sys/class/leds/ 控制 —— 本配置能真正开关它。
 #    2) RJ45 网口灯: 由 Realtek RTL8367S 交换芯片内部逻辑驱动(硬件行为),
-#       内核 rtl8367b 驱动只暴露 enable_vlan/reset_mib/mib/info 等属性,
-#       没有 LED 开关; 因此**软件无法直接关掉**, 详见 docs/build-guide.md 7.13。
+#       内核 rtl8367b 驱动没有 LED 属性, 软件关不掉 —— 已确认放弃该需求,
+#       需要时用物理遮挡或关掉空闲端口(见 docs/build-guide.md 7.13)。
 #
 #  用法:
 #    uci set portled.main.enable=0 && uci commit portled && /etc/init.d/portled restart
@@ -14,4 +14,3 @@
 config portled 'main'
 	option enable '1'          # 总开关: 0=关闭所有可控灯(GPIO)
 	option power_led '1'       # 电源灯(led-power)是否点亮
-	option switch_leds '1'     # 记录用: 网口灯期望状态(0 时仅尝试+写日志, 本机由硬件决定)
