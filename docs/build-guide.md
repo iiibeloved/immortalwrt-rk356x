@@ -11,9 +11,9 @@
 
 | 事项 | 值 |
 | --- | --- |
-| 下次构建 | **2026-11-08 01:00**（一次性 `0 17 7 11 *`）；之后每周一 02:00（cron `0 18 * * 0`） |
+| 下次构建 | **每周一 02:00 CST**（cron `0 18 * * 0`，UTC 周日 18:00）；也可随时手动 Run workflow |
 | 想提前编 | Actions → `Build G68-PLUS (iStoreOS style)` → **Run workflow** |
-| 预计耗时 | **约 2.5 小时**（ss-rust 已关闭，rust 步骤自动跳过；开启 ss-rust 则约 4.2 小时） |
+| 预计耗时 | **约 4 小时 15 分**（基线保留 ss-rust；关闭 ss-rust 可降到约 2.5 小时） |
 | 单次超时上限 | 350 分钟（workflow 内 `timeout-minutes`，GitHub 硬上限 360） |
 | 产物保存 | artifact **15 天**；Release 资产**长期**（除非手动删） |
 | 成功后的 Release tag | `g68-plus-YYYY.MM.DD`，同日重编自动加 `-r<run_number>` |
@@ -552,9 +552,9 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
 
 | 项目 | 值 |
 | --- | --- |
-| 构建（上一版） | run #42337188896（2026-11-07，549 个包，24 步全绿） |
-| Release | `g68-plus-2026.11.07-r12` |
-| 镜像 sha256 | `0ecc1541a381669861c45f8a505d077e97a986697064a4ab5d8fddfc8d3a9e96` |
+| 构建 | run #42395804653（2026-11-08 01:20，**552 个包**，24 步全绿，257 分钟） |
+| Release | `g68-plus-2026.11.08` |
+| 镜像 sha256 | `d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f` |
 | 分区 | kernel 16 MiB / rootfs 200 MiB / rootfs_data 4096 MiB |
 | 首次启动自动拆盘 | 50 GiB `ext_relay`（docker）+ 其余 `Data`（共享） |
 | 完整包清单 | [packages.md](packages.md) |
@@ -565,7 +565,7 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
 **要偏离基线时**（例如临时试别的 rootfs 大小），不要改默认值，直接 Run workflow 显式传参，
 构建产物会带 `-r<run_number>` 后缀，基线不受影响。
 
-**基线提交**：`051846bb` 起（含 LAN 改 192.168.100.1）；**基线指纹文件**：[`docs/baseline.sha256`](baseline.sha256)
+**基线提交**：`051846bb` 之后（含 LAN `192.168.100.1`、首启自动拆盘、NVMe 挂载、TTYD 修复）；**基线指纹文件**：[`docs/baseline.sha256`](baseline.sha256)
 （17 个文件：2 个 defconfig、2 个 workflow、`gen_image_generic.sh`、`files/` 全部脚本与配置）。校验方式：
 
 ```bash

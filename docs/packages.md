@@ -1,24 +1,21 @@
-# 固件包清单（冻结基线 · 2026-11-07）
+# 固件包清单（基线 · 2026-11-08）
 
-本清单由构建产物 `immortalwrt-rockchip-armv8-nsy_g68-plus.manifest` 直接生成（非手写）。
+> 由构建产物 `immortalwrt-rockchip-armv8-nsy_g68-plus.manifest` 直接生成，非手写。
 
-- **上一版产物**：run [#42337188896](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42337188896) · Release [`g68-plus-2026.11.07-r12`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.07-r12) · **549 个包**
-- **下一次构建（2026-11-08 01:00）**：配置新增 `kmod-fs-f2fs` / `kmod-fs-xfs` / `kmod-fs-ntfs3`，预计 **552 个包**；
-  成功发布后本文档会按新 manifest 刷新（届时包数、分类统计、指纹表同步更新）
-
-**当前配置为最终基线：此后定时构建与手动构建均基于此配置。**
+- **基线产物**：run [#42395804653](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42395804653) · Release [`g68-plus-2026.11.08`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08) · **552 个包**
+- **镜像 sha256**：`d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f`
+- 与上一版（549 包）差异：**+`kmod-fs-f2fs`、+`kmod-fs-xfs`、+`kmod-crypto-crc32`**（NTFS3 自 r12 起已内置）
 
 ## 基线指纹
 
 | 文件 | sha256 |
 | --- | --- |
 | `defconfig/g68-plus-istoreos.config` | `908855b1d006c80b759e9645068539e8ce265017c02d65cd008310201bc01b4e` |
-| `.github/workflows/build-g68-plus-docker.yml` | `ab6b05cf2a2d2ce5d0f1af7b010f1b4ab74cecd6cebb6f61e6bf7691bdf8c653` |
+| `.github/workflows/build-g68-plus-docker.yml` | `fbee12124d69d9b51fb6a6279360f1a9440133720de7f0bbe2bf5f01280bcd21` |
 | `scripts/gen_image_generic.sh` | `f6d59494a9c88f5fe4e2175f00067eb5b5160a32b903b0a16f726a7b99903e98` |
-| 固件镜像 `*.img.gz` | `0ecc1541a381669861c45f8a505d077e97a986697064a4ab5d8fddfc8d3a9e96` |
+| 固件镜像 `*.img.gz` | `d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f` |
 
-
-### 内置脚本 / 配置文件指纹（`files/` 目录，随镜像打进 rootfs）
+### 内置脚本 / 配置文件指纹（`files/`）
 
 | 文件 | sha256 |
 | --- | --- |
@@ -36,48 +33,48 @@
 | `files/etc/uci-defaults/99-opkg-istore` | `d6004e6311752baa9c49467f68ac3f1b7edf859bcee8679c6441fa9ed3f9ffc6` |
 | `files/etc/uci-defaults/99-set-lan-ip` | `f48add100eb91cd175351357022cf76dbb4a68318471e2695cb98eca333208cd` |
 
-> 上面这几张表合起来就是「基线」的完整指纹：改了任何一个文件，对应 sha256 都会变，可据此判断仓库是否偏离基线。
+> 完整基线清单见 [`baseline.sha256`](baseline.sha256)，校验：`sha256sum -c docs/baseline.sha256`。
 
-## 重点应用（功能入口）
+## 重点应用
 
 ### 系统 / 初始化
 
-| LuCI 菜单/包 | 作用 | 版本 |
+| 包 | 作用 | 版本 |
 | --- | --- | --- |
-| `luci-app-quickstart` | 向导式初始化、磁盘与网络快速配置（iStoreOS 风格） | 0.12.10-r1 |
-| `luci-app-store` | iStore 应用商店（配合内置的 iStoreOS 官方包源） | 0.2.1-r1 |
+| `luci-app-quickstart` | 向导式初始化：磁盘、网络、密码 | 0.12.10-r1 |
+| `luci-app-store` | iStore 应用商店 | 0.2.1-r1 |
 | `luci-theme-argon` | Argon 主题 | 2.4.3-r20250722 |
 
 ### 文件共享 / 存储
 
-| LuCI 菜单/包 | 作用 | 版本 |
+| 包 | 作用 | 版本 |
 | --- | --- | --- |
-| `luci-app-samba4` | Samba4 共享（Web 管理） | 26.300.08316~d72e293 |
-| `luci-app-unishare` | 统一共享面板（samba4 + webdav2 聚合） | 1.0.2-r1 |
+| `luci-app-samba4` | Samba4 共享管理 | 26.300.08316~d72e293 |
+| `luci-app-unishare` | 统一共享面板（samba4 + webdav2） | 1.0.2-r1 |
 | `luci-app-nfs` | NFS 服务端 | 1.1-r1 |
 | `luci-app-cifs-mount` | CIFS/SMB 挂载 | 26.300.08316~d72e293 |
-| `luci-app-diskman` | 磁盘管理 + SMART 健康度 | 0.2.13-r1 |
+| `luci-app-diskman` | 磁盘管理 + SMART | 0.2.13-r1 |
 
 ### 文件管理
 
-| LuCI 菜单/包 | 作用 | 版本 |
+| 包 | 作用 | 版本 |
 | --- | --- | --- |
 | `luci-app-filemanager` | 文件管理器 | 26.300.08316~d72e293 |
-| `luci-app-filetransfer` | 文件上传/下载/传输 | 1.3.0-r1 |
+| `luci-app-filetransfer` | 上传/下载/传输 | 1.3.0-r1 |
 
 ### 容器 / 应用
 
-| LuCI 菜单/包 | 作用 | 版本 |
+| 包 | 作用 | 版本 |
 | --- | --- | --- |
 | `luci-app-dockerman` | Docker 容器管理 | 0.5.26-r1 |
-| `luci-app-homeassistant` | Home Assistant（Docker 方式，含中文语言包） | 1.1.4-r20260804 |
+| `luci-app-homeassistant` | Home Assistant（Docker，含中文包） | 1.1.4-r20260804 |
 
 ### 监控 / 限速 / 管控
 
-| LuCI 菜单/包 | 作用 | 版本 |
+| 包 | 作用 | 版本 |
 | --- | --- | --- |
 | `luci-app-nlbwmon` | 每主机流量统计 | 26.300.08316~d72e293 |
-| `luci-app-rtbwmon` | 实时带宽监控 | 1.1.0-r1 |
+| `luci-app-rtbwmon` | 实时带宽 | 1.1.0-r1 |
 | `luci-app-eqosplus` | 按 IP/时段限速 | 1.3.0-r20251128 |
 | `luci-app-timecontrol` | 上网时间控制 | 3.2.4-r20260322 |
 | `luci-app-control-webrestriction` | 网站访问限制 | 1.1-r2 |
@@ -86,25 +83,25 @@
 
 ### 网络 / 代理
 
-| LuCI 菜单/包 | 作用 | 版本 |
+| 包 | 作用 | 版本 |
 | --- | --- | --- |
 | `shadowsocks-rust-sslocal` | SS 客户端（含 ssserver/ssmanager） | 1.23.5-r1 |
 | `xray-core` | Xray 核心 | 25.2.21-r1 |
 | `v2ray-plugin` | V2Ray 插件 | 5.25.0-r1 |
 | `chinadns-ng` | DNS 分流 | 2025.08.09-r1 |
-| `luci-app-lucky` | Lucky：反代 / DDNS / 内网穿透 / WOL | 3.0.0-r31 |
+| `luci-app-lucky` | Lucky：反代/DDNS/穿透/WOL | 3.0.0-r31 |
 
 ## 全量包清单
 
-共 **549** 个包。
+共 **552** 个包。
 
 | 分类 | 包数 |
 | --- | --- |
 | 系统与其它 | 247 |
-| 内核与驱动 | 151 |
-| 存储与共享 | 25 |
+| 内核与驱动 | 154 |
+| 存储与共享 | 28 |
 | 容器 (Docker) | 7 |
-| 网络 / 代理 / 流量 | 33 |
+| 网络 / 代理 / 流量 | 30 |
 | LuCI 组件/主题/协议 | 22 |
 | LuCI 应用 | 33 |
 | LuCI 语言包 | 31 |
@@ -117,7 +114,7 @@
 | `attr` | 2.5.2-r3 |
 | `autocore` | 42 |
 | `avahi-dbus-daemon` | 0.9_rc5-r1 |
-| `base-files` | 1~b99a98a |
+| `base-files` | 1~046b253 |
 | `bash` | 5.2.37-r1 |
 | `bc` | 1.07.1-r1 |
 | `blockd` | 2024.07.14~408c2cc4-r1 |
@@ -146,6 +143,8 @@
 | `getrandom` | 2024.04.26~85f10530-r1 |
 | `haproxy` | 3.0.25-r1 |
 | `hostapd-common` | 2024.09.15~5ace39b0-r2 |
+| `ip-full` | 6.11.0-r1 |
+| `ip-tiny` | 6.11.0-r1 |
 | `ip6tables-nft` | 1.8.10-r1 |
 | `ipt2socks` | 1.1.4-r2 |
 | `iw-full` | 6.9-r1 |
@@ -173,7 +172,6 @@
 | `libelf1` | 0.192-r1 |
 | `libev` | 4.33-r2 |
 | `libexpat` | 2.8.4-r1 |
-| `libf2fs6` | 1.16.0-r3 |
 | `libfdisk1` | 2.40.2-r1 |
 | `libfuse1` | 2.9.9-r2 |
 | `libgcc1` | 13.3.0-r4 |
@@ -251,7 +249,6 @@
 | `losetup` | 2.40.2-r1 |
 | `lua` | 5.1.5-r11 |
 | `miniupnpd-nftables` | 2.3.9-r1 |
-| `mkf2fs` | 1.16.0-r3 |
 | `mtd` | 26 |
 | `netdata` | 1.38.1-r3 |
 | `netifd` | 2024.12.17~ea01ed41-r1 |
@@ -327,6 +324,7 @@
 | `swconfig` | 12 |
 | `tar` | 1.35-r1 |
 | `taskd` | 1.0.3-r2 |
+| `tc-tiny` | 6.11.0-r1 |
 | `terminfo` | 6.4-r2 |
 | `ttyd` | 1.7.3-r1 |
 | `uboot-envtools` | 2024.07-r1 |
@@ -354,18 +352,17 @@
 | `wireless-tools` | 29-r6 |
 | `wpad-openssl` | 2024.09.15~5ace39b0-r2 |
 | `wsdd2` | 2023.12.21~b676d8ac-r2 |
-| `xfs-mkfs` | 6.10.1-r1 |
 | `xtables-nft` | 1.8.10-r1 |
 | `xz` | 5.8.3-r1 |
 | `xz-utils` | 5.8.3-r1 |
 | `zerotier` | 1.14.1-r14 |
 | `zlib` | 1.3.1-r1 |
 
-### 内核与驱动（151）
+### 内核与驱动（154）
 
 | 包名 | 版本 |
 | --- | --- |
-| `kernel` | 6.6.99~e7f9c4090317e96946664ea11b1adf3b-r1 |
+| `kernel` | 6.6.99~5ea661f7b6d7acc972ce0af4072e36b0-r1 |
 | `kmod-asn1-decoder` | 6.6.99-r1 |
 | `kmod-asn1-encoder` | 6.6.99-r1 |
 | `kmod-br-netfilter` | 6.6.99-r1 |
@@ -377,6 +374,7 @@
 | `kmod-crypto-cbc` | 6.6.99-r1 |
 | `kmod-crypto-ccm` | 6.6.99-r1 |
 | `kmod-crypto-cmac` | 6.6.99-r1 |
+| `kmod-crypto-crc32` | 6.6.99-r1 |
 | `kmod-crypto-crc32c` | 6.6.99-r1 |
 | `kmod-crypto-ctr` | 6.6.99-r1 |
 | `kmod-crypto-cts` | 6.6.99-r1 |
@@ -409,6 +407,7 @@
 | `kmod-fs-exfat` | 6.6.99-r1 |
 | `kmod-fs-exportfs` | 6.6.99-r1 |
 | `kmod-fs-ext4` | 6.6.99-r1 |
+| `kmod-fs-f2fs` | 6.6.99-r1 |
 | `kmod-fs-ksmbd` | 6.6.99-r1 |
 | `kmod-fs-msdos` | 6.6.99-r1 |
 | `kmod-fs-netfs` | 6.6.99-r1 |
@@ -420,6 +419,7 @@
 | `kmod-fs-ntfs3` | 6.6.99-r1 |
 | `kmod-fs-smbfs-common` | 6.6.99-r1 |
 | `kmod-fs-vfat` | 6.6.99-r1 |
+| `kmod-fs-xfs` | 6.6.99-r1 |
 | `kmod-fuse` | 6.6.99-r1 |
 | `kmod-gpio-button-hotplug` | 6.6.99-r5 |
 | `kmod-hwmon-core` | 6.6.99-r1 |
@@ -517,7 +517,7 @@
 | `kmod-usb-storage-uas` | 6.6.99-r1 |
 | `kmod-veth` | 6.6.99-r1 |
 
-### 存储与共享（25）
+### 存储与共享（28）
 
 | 包名 | 版本 |
 | --- | --- |
@@ -532,8 +532,10 @@
 | `ksmbd-server` | 3.5.5-r1 |
 | `libblkid1` | 2.40.2-r1 |
 | `libext2fs2` | 1.47.0-r2 |
+| `libf2fs6` | 1.16.0-r3 |
 | `lsblk` | 2.40.2-r1 |
 | `mdadm` | 4.3-r2 |
+| `mkf2fs` | 1.16.0-r3 |
 | `mount-utils` | 2.40.2-r1 |
 | `nfs-kernel-server` | 2.6.2-r4 |
 | `nfs-kernel-server-utils` | 2.6.2-r4 |
@@ -546,6 +548,7 @@
 | `samba4-server` | 4.18.11-r1 |
 | `smartmontools` | 7.5-r1 |
 | `smartmontools-drivedb` | 7.5-r1 |
+| `xfs-mkfs` | 6.10.1-r1 |
 
 ### 容器 (Docker)（7）
 
@@ -559,7 +562,7 @@
 | `runc` | 1.1.14-r1 |
 | `tini` | 0.19.0-r2 |
 
-### 网络 / 代理 / 流量（33）
+### 网络 / 代理 / 流量（30）
 
 | 包名 | 版本 |
 | --- | --- |
@@ -571,8 +574,6 @@
 | `dnsmasq-full` | 2.90-r4 |
 | `etherwake` | 1.09-r5 |
 | `firewall4` | 2024.12.18~18fc0ead-r1 |
-| `ip-full` | 6.11.0-r1 |
-| `ip-tiny` | 6.11.0-r1 |
 | `iptables-mod-extra` | 1.8.10-r1 |
 | `iptables-mod-filter` | 1.8.10-r1 |
 | `iptables-nft` | 1.8.10-r1 |
@@ -586,7 +587,6 @@
 | `ppp-mod-pppoe` | 2.5.1-r1 |
 | `shadowsocks-rust-sslocal` | 1.23.5-r1 |
 | `shadowsocks-rust-ssserver` | 1.23.5-r1 |
-| `tc-tiny` | 6.11.0-r1 |
 | `tcping` | 2020.07.04~db910183-r1 |
 | `ubus` | 2025.01.02~afa57cce-r1 |
 | `ubusd` | 2025.01.02~afa57cce-r1 |
@@ -669,31 +669,31 @@
 | `luci-i18n-autoreboot-zh-cn` | 26.300.08316~d72e293 |
 | `luci-i18n-base-zh-cn` | 26.300.08316~d72e293 |
 | `luci-i18n-cifs-mount-zh-cn` | 26.300.08316~d72e293 |
-| `luci-i18n-control-webrestriction-zh-cn` | 26.311.12488~5608c80 |
-| `luci-i18n-control-weburl-zh-cn` | 26.311.12488~5608c80 |
+| `luci-i18n-control-webrestriction-zh-cn` | 26.311.43765~120312a |
+| `luci-i18n-control-weburl-zh-cn` | 26.311.43765~120312a |
 | `luci-i18n-cpufreq-zh-cn` | 26.300.08316~d72e293 |
 | `luci-i18n-ddns-go-zh-cn` | 26.300.08316~d72e293 |
 | `luci-i18n-diskman-zh-cn` | 26.300.08316~d72e293 |
 | `luci-i18n-dockerman-zh-cn` | 26.300.08316~d72e293 |
-| `luci-i18n-eqosplus-zh-cn` | 26.311.12488~5608c80 |
+| `luci-i18n-eqosplus-zh-cn` | 26.311.43765~120312a |
 | `luci-i18n-filemanager-zh-cn` | 26.300.08316~d72e293 |
 | `luci-i18n-firewall-zh-cn` | 26.300.08316~d72e293 |
-| `luci-i18n-homeassistant-zh-cn` | 26.311.12488~5608c80 |
+| `luci-i18n-homeassistant-zh-cn` | 26.311.43765~120312a |
 | `luci-i18n-homeproxy-zh-cn` | 26.300.08316~d72e293 |
 | `luci-i18n-ksmbd-zh-cn` | 26.300.08316~d72e293 |
-| `luci-i18n-lucky-zh-cn` | 26.311.12488~5608c80 |
+| `luci-i18n-lucky-zh-cn` | 26.311.43765~120312a |
 | `luci-i18n-nfs-zh-cn` | 26.300.08316~d72e293 |
 | `luci-i18n-nlbwmon-zh-cn` | 26.300.08316~d72e293 |
-| `luci-i18n-oaf-zh-cn` | 26.311.14974~b99a98a |
+| `luci-i18n-oaf-zh-cn` | 26.311.53226~046b253 |
 | `luci-i18n-package-manager-zh-cn` | 26.300.08316~d72e293 |
 | `luci-i18n-passwall-zh-cn` | 26.300.08316~d72e293 |
-| `luci-i18n-quickstart-zh-cn` | 26.311.12488~5608c80 |
-| `luci-i18n-rtbwmon-zh-cn` | 26.311.12488~5608c80 |
+| `luci-i18n-quickstart-zh-cn` | 26.311.43765~120312a |
+| `luci-i18n-rtbwmon-zh-cn` | 26.311.43765~120312a |
 | `luci-i18n-samba4-zh-cn` | 26.300.08316~d72e293 |
-| `luci-i18n-timecontrol-zh-cn` | 26.311.12488~5608c80 |
+| `luci-i18n-timecontrol-zh-cn` | 26.311.43765~120312a |
 | `luci-i18n-ttyd-zh-cn` | 26.300.08316~d72e293 |
-| `luci-i18n-unishare-zh-cn` | 26.311.12488~5608c80 |
+| `luci-i18n-unishare-zh-cn` | 26.311.43765~120312a |
 | `luci-i18n-upnp-zh-cn` | 26.300.08316~d72e293 |
 | `luci-i18n-wol-zh-cn` | 26.300.08316~d72e293 |
-| `luci-i18n-wolplus-zh-cn` | 26.311.12488~5608c80 |
+| `luci-i18n-wolplus-zh-cn` | 26.311.43765~120312a |
 | `luci-i18n-zerotier-zh-cn` | 26.300.08316~d72e293 |

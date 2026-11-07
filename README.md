@@ -1,173 +1,252 @@
-# immortalwrt-rk356x
+# ImmortalWrt · RK3568（NSY G68-PLUS）定制固件
 
-基于 [ImmortalWrt 24.10](https://github.com/immortalwrt/immortalwrt) 的 rockchip/armv8 派生仓库，面向 RK3568 系列 NAS/软路由设备，
-内置 GitHub Actions 一键编译与 iStoreOS 风格插件集成。
+> **致谢**：由衷感谢 [@zhoufuli](https://github.com/zhoufuli/immortalwrt-rk356x) —— 本仓库 fork 自 `zhoufuli/immortalwrt-rk356x`，
+> 设备适配（DTS、u-boot/ATF、分区方案）全部来自上游；同时感谢 [ImmortalWrt](https://github.com/immortalwrt) 与 OpenWrt 构建体系，
+> 以及 [kenzok8/small-package](https://github.com/kenzok8/small-package)、[iStoreOS](https://github.com/linkease) 提供的软件包与源。
+
+面向 **NSY G68-PLUS（RK3568 / ARMv8）** 的 ImmortalWrt 24.10 固件：**iStoreOS 风格**的初始化与商店、Docker、
+存储自动化（首启自动分区 + NVMe 自动挂载），全流程 GitHub Actions 构建、自动发版，配置以**冻结基线**约束。
 
 ---
 
-## 当前状态（下次构建速览）
+## 目录
 
-> 以下为 **2026-11-06 快照**；时间敏感信息请以 [Actions](https://github.com/iiibeloved/immortalwrt-rk356x/actions) 与 [Releases](https://github.com/iiibeloved/immortalwrt-rk356x/releases) 页面为准。
+1. [开箱信息](#1-开箱信息)
+2. [首次启动自动做了什么](#2-首次启动自动做了什么)
+3. [软件构成（iStoreOS 风格）](#3-软件构成istoreos-风格)
+4. [自动构建流程](#4-自动构建流程)
+5. [手动构建 / 本地复现](#5-手动构建--本地复现)
+6. [下载与刷机](#6-下载与刷机)
+7. [基线冻结与校验](#7-基线冻结与校验)
+8. [文档索引](#8-文档索引)
+9. [已知限制](#9-已知限制)
+
+---
+
+## 1. 开箱信息
 
 | 项目 | 值 |
 | --- | --- |
-| **下次构建** | **2026-11-08 01:00（一次性基线构建）**，成功后自动发 Release；之后每周一 02:00 定时（cron `0 18 * * 0`）· 约 3.5–4 小时（含 ss-rust） |
-| 想立即构建 | Actions → `Build G68-PLUS (iStoreOS style)` → **Run workflow**（≈ 2.5 小时） |
-| 最近一次成功构建 | [run #42270932303](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42270932303)（2026-11-07 02:28 → 05:05，157 分钟） |
-| 最近一次发布 | [g68-plus-2026.11.07](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.07)（165.4 MB，分区 16/200/4096） |
-| 当前仓库配置 | **保留 `shadowsocks-rust`**（构建约 4 小时）· **`rootfs` 200 MiB（与 fork 一致）+ `rootfs_data` 4096 MiB** · 22 个 iStoreOS 风格包 + samba4 + docker 引擎 |
-| 下次构建预期 | 11-08 01:00 起约 3.5–4 小时（保留 ss-rust）→ 成功后自动发布 `g68-plus-2026.11.08` Release（免登录直链） |
-| 构建失败 | 自动开 Issue：标题 `CI 构建失败: … #<run>`，正文含失败步骤、run 链接与排查指引；同类未关闭则追加评论 |
-| 详细步骤 | [docs/build-guide.md](docs/build-guide.md)（触发方式 / 24 步流程 / 失败速查表 / 注意事项） |
-| **基线** | 冻结于 `d83f4b52`（17 个文件指纹）· CI 强校验，偏离即构建失败 · 校验 `sha256sum -c docs/baseline.sha256` |
-| **固件包清单** | [docs/packages.md](docs/packages.md)（上一版 **549 个包**；11-08 版新增 3 个 kmod，构建后刷新） |
+| 设备 | NSY G68-PLUS（RK3568，aarch64_generic） |
+| 系统 | ImmortalWrt 24.10（kernel 6.6.99、u-boot/ATF 走 `pine64-img` 流程） |
+| **管理地址** | **`http://192.168.100.1`**（首启由 `99-set-lan-ip` 写入，掩码 `/24`） |
+| 登录账号 | `root`，**默认空密码**（首登后请在「系统 → 管理权」立即设置） |
+| SSH | `ssh root@192.168.100.1`（22） |
+| DHCP 池 | `192.168.100.100 – 192.168.100.249`（`dhcp.lan.start=100 / limit=150`，随网段自动偏移） |
+| 默认时区 | `Asia/Shanghai`（`CST-8`） |
+| 内置终端 | LuCI → 系统 → **TTYD 终端**（`ttyd` 监听 `0.0.0.0:7681`，不绑定网卡，改 IP 不掉线） |
+| 应用商店 | LuCI → **iStore**（安装向导的「存储位置」选 `/mnt/data`） |
+
+> 改地址：`uci set network.lan.ipaddr=192.168.100.1 && uci commit network && /etc/init.d/network reload`
 
 ---
 
-## 支持的设备与 defconfig
+## 2. 首次启动自动做了什么
 
-| defconfig | 设备 | 说明 |
-| --- | --- | --- |
-| `defconfig/g68-plus-docker.config` | NSY **G68-PLUS**（RK3568） | 带 Docker/商店的完整配置，CI 默认使用 |
-| `defconfig/g68_mtk_wifi.config` | NSY G68-PLUS | MTK WiFi 变体 |
-| `defconfig/g16-plus-docker.config` / `g16-plus.config` | NSY **G16-PLUS**（RK3568） | |
-| `defconfig/g16_mtk_wifi.config` | NSY G16-PLUS | MTK WiFi 变体 |
-| `defconfig/g18-pro-docker.config` / `g18-pro.config` | BDY **G18-PRO**（RK3568） | |
-| `defconfig/g18_mtk_wifi.config` | BDY G18-PRO | MTK WiFi 变体 |
+固件把「刷完还得手动分区/挂载」的步骤全部前置。脚本分两类语义：**一次性**（`/etc/uci-defaults/`，执行成功即被 OpenWrt 删除）
+与**常驻**（`/etc/init.d/`，每次开机执行但带幂等守卫）。
 
-内核 Linux 6.6，包架构 `aarch64_generic`，启动流程 `pine64-img`（产物为 `*-squashfs-sysupgrade.img.gz`，可直接 dd 刷写）。
+| 动作 | 实现 | 时机 | 幂等保护 |
+| --- | --- | --- | --- |
+| 改 LAN 为 `192.168.100.1` | `99-set-lan-ip` | 一次性 | 已是目标值则跳过 |
+| 启用常驻脚本 + 首启立即执行一次 | `98-enable-custom-initd` | 一次性 | — |
+| 拆分剩余空间：`ext_relay` **50 GiB**（docker）+ `Data`（其余，共享/iStore） | `docker-disk` | 常驻 | `/etc/.docker-disk.done` + `flock` + 已有 p5/p6 复用 + 已有文件系统不重格 |
+| 分区表改动内核未识别 → **自动重启一次**续跑 | `docker-disk` | 常驻 | `/etc/.docker-disk.rebooted` 防循环 |
+| docker 数据目录 → `/mnt/ext_relay/docker` | `docker-disk` / `docker-dataroot` | 常驻 | 手动指定则尊重 |
+| NVMe 自动检测挂载 → `/mnt/nvme0` | `nvme-automount` | 常驻 | 已挂载跳过；fstab 按 UUID 去重 |
+| TTYD 去掉 `@lan` 绑定（改 IP 不再「已拒绝连接」） | `98-fix-ttyd` + `files/etc/config/ttyd` | 一次性 | 无 `interface` 才改 |
+| 补 opkg arch、必要时关签名校验 | `99-opkg-istore` | 一次性 | 已有 arch 行则不重复 |
+| 指示灯（电源灯等 GPIO 灯）可关 | `portled` | 常驻 | 按 `/etc/config/portled` 应用 |
 
----
+**磁盘布局**（256 GB eMMC，镜像占约 4.3 GiB）：
 
-## 固件下载
-
-编译成功后会自动发布到 **Releases**（免登录直链，长期有效）：
-
-- 发布页：<https://github.com/iiibeloved/immortalwrt-rk356x/releases>
-- 直链格式：`https://github.com/iiibeloved/immortalwrt-rk356x/releases/download/<tag>/immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz`
-- tag 规则：`g68-plus-YYYY.MM.DD`；同一天多次构建自动追加 `-r<run_number>`，多版本并存
-- 每次构建的 Actions artifact 保留 15 天，Release 资产长期保留
-
-刷机（**务必先校验 sha256**）：
-
-```bash
-curl -LO <release>/immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz
-curl -LO <release>/sha256sums
-sha256sum -c sha256sums --ignore-missing
-gunzip immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz
-sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/dev/sdX bs=4M conv=fsync status=progress
+```
+p1 kernel 16 MiB │ p2 rootfs 200 MiB (squashfs) │ p3 rootfs_data 4096 MiB (/overlay)
+p4 extended ── p5 ext4 ext_relay  50 GiB  → /mnt/ext_relay   (docker 数据)
+            └─ p6 ext4 Data       其余     → /mnt/data        (共享 / iStore 安装位置)
 ```
 
-也可在 LuCI「系统 → 备份/升级」直接上传 `.img.gz`。
+剩余空间 < 58 GiB 时脚本跳过拆盘（小盘保护），此时 iStore 的「存储位置」为空 —— 这是唯一需要人工介入的情形。
 
 ---
 
-## 一键编译（GitHub Actions）
+## 3. 软件构成（iStoreOS 风格）
 
-工作流：[`.github/workflows/build-g68-plus-docker.yml`](.github/workflows/build-g68-plus-docker.yml)
-
-| 触发 | 条件 |
+| 维度 | 内容 |
 | --- | --- |
-| 手动 | Actions → `Build G68-PLUS (iStoreOS style)` → **Run workflow** |
-| push | 仅当 `defconfig/g68-plus-docker.config` 或 `defconfig/g68-plus-istoreos.config` 变动 |
-| 定时 | 每周一 **02:00（Asia/Shanghai）**，cron `0 18 * * 0`（UTC） |
+| **商店 / 初始化** | `luci-app-store`（iStore）+ `luci-app-quickstart`（向导：磁盘、网络、密码）+ `luci-lib-taskd` / `taskd` |
+| **容器** | `dockerd` / `containerd` / `runc` / `docker` + `luci-app-dockerman`；数据目录自动落 `/mnt/ext_relay/docker` |
+| **共享** | `samba4-server` + `luci-app-samba4`、`unishare`（samba4 + webdav2 聚合面板）、`nfs-kernel-server` + `luci-app-nfs`、`cifsmount` + `kmod-fs-cifs` + `luci-app-cifs-mount` |
+| **存储运维** | `luci-app-diskman`（分区 + SMART）、`parted`、`e2fsprogs`、`btrfs-progs`、`xfs-mkfs`、`mkf2fs`；kmod：ext4 / exfat / vfat / btrfs / f2fs / xfs / ntfs3 / nvme |
+| **监控限速** | `luci-app-nlbwmon`（每主机流量）、`luci-app-rtbwmon`（实时带宽）、`luci-app-eqosplus`（按 IP/时段限速）、`appfilter` |
+| **上网管控** | `luci-app-timecontrol`、`luci-app-control-webrestriction`、`luci-app-control-weburl` |
+| **代理** | `shadowsocks-rust`（sslocal/ssserver/ssmanager）、`xray-core`、`v2ray-plugin`、`chinadns-ng`、`luci-app-lucky` |
+| **文件管理** | `luci-app-filemanager`、`luci-app-filetransfer` |
+| **其他** | `luci-app-wolplus` + `etherwake`（网络唤醒）、`luci-theme-argon`、`ca-certificates`、`curl` |
+| **软件源** | 内置 `/etc/opkg/distfeeds.conf`：官方 6 个（24.10.0）+ iStoreOS 3 个（store / nas_luci / nas） |
 
-手动参数：
+完整 **552 个包**（含版本）见 **[docs/packages.md](docs/packages.md)**。
 
-| 参数 | 默认 | 说明 |
+---
+
+## 4. 自动构建流程
+
+### 4.1 触发方式
+
+| 方式 | 说明 |
+| --- | --- |
+| **定时** | cron `0 18 * * 0`（UTC 周日 18:00 = **每周一 02:00 CST**） |
+| **手动** | Actions → Build G68-PLUS → *Run workflow*，参数见下 |
+| **推送** | 仅当 `defconfig/g68-plus-docker.config` 或 `defconfig/g68-plus-istoreos.config` 变更时触发 |
+
+`workflow_dispatch` 输入（默认值即基线）：
+
+| 输入 | 默认 | 说明 |
 | --- | --- | --- |
-| `defconfig` | `defconfig/g68-plus-docker.config` | 基础配置（换机型就改这个） |
-| `extra_config` | `defconfig/g68-plus-istoreos.config` | 附加差异项（iStoreOS 插件等） |
-| `rootfs_size` | `200` | 只读系统分区，与 fork 源 `CONFIG_TARGET_ROOTFS_PARTSIZE=200` 一致。**实测 squashfs = 160.2 MiB**（xz，5824 inode），占 200 MiB 的 ~80%；去掉 ss-rust 后约 150 MiB（~75%）。要更多余量传 `256`（~60%） |
-| `rootfs_data_size` | `4096` | 可写 overlay：iStore/opkg 装的包、docker 数据、配置改动（脚本 `gen_image_generic.sh` 读取 `ROOTFS_DATA_PARTSIZE`） |
+| `defconfig` | `defconfig/g68-plus-docker.config` | 基础配置（目标/设备/内核） |
+| `extra_config` | `defconfig/g68-plus-istoreos.config` | 附加包（iStoreOS 风格那一层） |
+| `rootfs_size` | `200` | rootfs 分区 MiB |
+| `rootfs_data_size` | `4096` | rootfs_data（overlay）MiB |
+| `upload_artifacts` | `true` | 是否上传 artifact |
+| `publish_release` | `true` | 是否自动发 Release |
 
-> docker 数据目录：镜像内置 `/etc/init.d/docker-dataroot`，开机自动把 `dockerd.globals.data_root`
-> 指到外挂盘（`<挂载点>/docker`，要求剩余 ≥8 GiB 的 ext4/btrfs/xfs/f2fs）；没有外挂盘时保持 `/opt/docker`。
-> 手工设置过 `data_root` 则不再自动改动。
->
-> 另外镜像内置 `/etc/init.d/docker-disk`：**首次启动**会把 eMMC 上镜像之外的剩余空间（≥58 GiB 时）拆成两块——
-> **50 GiB ext4（卷标 `ext_relay`）挂 `/mnt/ext_relay` 给 docker**，其余 ext4（卷标 `Data`）挂 `/mnt/data` 作共享盘（iStore 安装时选它）；
-> 幂等、只追加不改动已有分区、失败自动回退 `/opt/docker`；关闭方式 `touch /etc/.docker-disk.done`。详见 build-guide 7.8。
+> 临时试验请**显式传参**，不要改默认值；同日多次构建会自动加 `-r<run_number>` 后缀并存。
 
-分区布局：`kernel 16 MiB + rootfs 200 MiB + rootfs_data 4096 MiB`，整盘镜像约 **4.3 GiB**，介质 ≥5 GB（8 GB 卡可用）。
-其中 p1/p2 与 fork 源一致，只有 p3 放大到 4096 供 docker/iStore 使用。
-每次构建会在 Job Summary 里输出 squashfs 实际占用率，超过 85% 会告警提示调大 `rootfs_size`。
-| `upload_artifacts` | `true` | 上传 artifact（15 天） |
-| `publish_release` | `true` | 成功后自动发布 Release |
+### 4.2 流水线（24 步，关键闸门）
 
-耗时参考：**约 4 小时 15 分**（含 `shadowsocks-rust` → 需编 rustc/LLVM，约 2 小时）；若在附加配置里关掉 ss-rust，可降到约 2.5 小时。
+```
+释放空间 → 检出源码 → chmod 内置脚本 → 校验配置(+ 基线强校验) → 装依赖
+→ 生成 feeds.conf → 官方 4 源 → 第三方 feed 选择性安装 → 本地 filetransfer
+→ 应用 defconfig + 附加配置(+ 强制关闭 pass) → make prereq → 校验附加包
+→ 缓存 → make download → tools+toolchain → rust host → make world
+→ 记录 squashfs 占用 → 断言分区表(16/200/4096) → 收集 → 上传 artifact → 发布 Release
+→ [失败时] 自动开 issue / 上传日志
+```
 
----
+- **闸门 1**：基线指纹（`sha256sum -c docs/baseline.sha256`）不一致 → `::error::` 并**中断**；
+- **闸门 2**：`make prereq`（pyelftools 等宿主机依赖）；
+- **闸门 3**：附加包生效校验（Job Summary 表格 ✅/⚠️/⛔）；
+- **闸门 4**：镜像 MBR 断言必须为 `16 / 200 / 4096` MiB，否则失败；
+- **产物**：`*.img.gz` + `sha256sums` 自动挂到 Release，说明页内置**直链 + 3 条加速链接**。
 
-## 集成内容（`g68-plus-istoreos.config`）
+### 4.3 耗时基线（保留 ss-rust）
 
-- **iStoreOS 风格**：`luci-app-quickstart` + `quickstart`、`luci-app-store`（iStore）+ `taskd` / `luci-lib-taskd` / `luci-lib-xterm`
-- **共享 / 运维**：`unishare`（samba4 + webdav2 聚合面板）、`lucky`、`luci-app-wolplus`、`luci-app-rtbwmon`
-- **文件管理**：`luci-app-filemanager`、`luci-app-filetransfer`
-- **Samba4**：`samba4-server` + `luci-app-samba4`
-- **Docker**：`dockerd` / `containerd` / `runc` / `docker`（原 defconfig 只有 dockerman 界面，已补齐引擎）
-- **代理组件**：`shadowsocks-rust-sslocal/ssserver`（默认启用；不想要可在附加配置里关闭，省约 2 小时）
-- **监控/管控**：`luci-app-nlbwmon`（流量）、`luci-app-eqosplus`（限速）、`luci-app-timecontrol`、`luci-app-control-webrestriction`、`luci-app-control-weburl`
-- **存储**：`luci-app-nfs` + `nfs-kernel-server`、`luci-app-cifs-mount` + `kmod-fs-cifs` + `cifsmount`、`luci-app-diskman`（含 SMART 页签）
-- **指示灯开关**：`/etc/config/portled` 可开关电源灯等 GPIO 灯；RJ45 网口灯由 RTL8367S 硬件驱动，软件不可控（该需求已放弃，详见 build-guide 7.13）
-- **TTYD 终端防坑**：内置 `ttyd` 配置不绑定 `@lan`，改 LAN IP 后终端不会出现「已拒绝连接」（并带首次启动自动修正脚本）
-- **NVMe 自动挂载**：开机检测 `/dev/nvme*n1`，已有文件系统直接挂 `/mnt/nvme0`（写 fstab/UUID）；空白盘自动 GPT+ext4（卷标 `NVME0`）；不支持的文件系统不格式化
-- **Home Assistant**：`luci-app-homeassistant` + 中文语言包（Docker 方式，镜像首次启动拉取）
-- **软件源**：内置 `/etc/opkg/distfeeds.conf` —— ImmortalWrt 24.10.0（CERNET，6 源）+ **iStoreOS 官方仓库（store / nas_luci / nas，322 个包）**，刷完即可在「系统 → 软件包」安装；首次启动自动补 `arch aarch64_cortex-a53`、必要时自动关闭签名校验（日志 `/etc/opkg-boot.log`）；kmods 因自编内核 6.6.99 与官方 6.6.86 不匹配而未启用
-
-第三方源：`kenzok8/small-package`（只按名安装需要的包，避免与官方源同名冲突）、`DustReliant/luci-app-filetransfer`（本地单包引入）。
-
----
-
-## 文档
-
-| 文档 | 内容 |
+| 阶段 | 耗时 |
 | --- | --- |
-| [docs/build-guide.md](docs/build-guide.md) | **下次编译详细教程**：触发方式、24 步流程与实测耗时、产物下载、刷机、失败速查表、12 条注意事项、30 秒检查清单 |
-| [docs/packages.md](docs/packages.md) | **固件包清单**（重点应用 + 全量分类表 + 基线指纹；随每次成功构建刷新） |
-| [docs/ci-build.md](docs/ci-build.md) | 构建方案设计、依赖来源表、实测记录与已踩过的坑 |
-| [.github/workflows/publish-release.yml](.github/workflows/publish-release.yml) | 把任意历史 run 的 artifact 补发到指定 Release |
+| 工具链 | ~37 min |
+| rust（vendor 修复 + 预编译） | ~126 min |
+| `make world` | ~82 min |
+| 合计 | **~4 h 15 min**（关闭 ss-rust 可降到约 2.5 h） |
 
 ---
 
-## 本地编译
+## 5. 手动构建 / 本地复现
+
+适合本地调试或没有 Actions 的环境（Ubuntu 22.04+ / Debian 12，≥ 60 GB 磁盘，≥ 8 GB RAM）。
 
 ```bash
+# 0) 克隆（建议浅克隆）
 git clone --depth 1 https://github.com/iiibeloved/immortalwrt-rk356x.git
 cd immortalwrt-rk356x
 
-cp feeds.conf.default feeds.conf
-echo 'src-git small https://github.com/kenzok8/small-package.git;main' >> feeds.conf
-./scripts/feeds update -a && ./scripts/feeds install -a
-./scripts/feeds update small
-for p in quickstart luci-app-quickstart luci-app-store luci-lib-taskd luci-lib-xterm taskd \
-         unishare luci-app-unishare webdav2 luci-app-lucky lucky luci-app-wolplus luci-app-rtbwmon; do
-  ./scripts/feeds install "$p"
-done
-git clone --depth 1 https://github.com/DustReliant/luci-app-filetransfer.git package/luci-app-filetransfer
+# 1) 宿主机依赖（与 CI 一致）
+sudo apt-get update && sudo apt-get install -y build-essential gawk gcc-multilib g++-multilib \
+  flex bison libncurses-dev zlib1g-dev libssl-dev python3 python3-distutils python3-setuptools \
+  python3-pyelftools libgnutls28-dev device-tree-compiler rsync unzip wget curl git \
+  libelf-dev bc bzip2 patch perl cpio
 
+# 2) 软件源（4 个官方源；如需 iStoreOS 源见 files/etc/opkg/distfeeds.conf）
+./scripts/feeds update -a && ./scripts/feeds install -a
+
+# 3) 应用配置：基础 defconfig + 附加配置（顺序不能反）
 cp defconfig/g68-plus-docker.config .config
 cat defconfig/g68-plus-istoreos.config >> .config
-make defconfig
-make download -j"$(nproc)"
-make -j"$(nproc)"
+make defconfig                       # 关键：让 kconfig 重新解析，否则附加项会被还原
 
-ls bin/targets/rockchip/armv8/
+# 4) 校验附加包是否真的生效
+grep -c '^CONFIG_PACKAGE_.*=y' .config     # 基线约 550+ 项
+
+# 5) 编译（先下载，再并行编译；JOBS 按机器核数调整）
+make download -j8
+make -j$(nproc) V=s                        # 首次约 1.5–4 h，视是否编 rust 而定
+
+# 6) 产物
+ls bin/targets/rockchip/armv8/*.img.gz     # immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz
+cat bin/targets/rockchip/armv8/sha256sums
 ```
 
-宿主机需要 `python3-pyelftools`（RK3568 u-boot 打 FIT 镜像必需），否则会在 prereq 阶段失败。
+**要点**
+
+- 只改 `extra_config` 里的包，也要走 `make defconfig`，否则自定义 `# CONFIG_PACKAGE_x is not set` 会被 kconfig 还原（CI 用「强制关闭 pass」二次修正）；
+- 想内置自己的文件：放进仓库 `files/`（构建时 `include/image.mk` 最后一步 `prepare_rootfs(..., $(TOPDIR)/files)` 覆盖）；
+- 想减小编译时间：把 `defconfig/g68-plus-istoreos.config` 里的 shadowsocks-rust 关闭（省约 2 小时）。
 
 ---
 
-## 注意事项
+## 6. 下载与刷机
 
-1. **刷完默认 LAN 地址是 `192.168.100.1`**（首启由 `/etc/uci-defaults/99-set-lan-ip` 改好），DHCP 池 192.168.100.100–249；要换地址直接 `uci set network.lan.ipaddr=...`。
-2. `uci-defaults` 里的 5 个脚本是**一次性**的（执行成功即自动删除）；`/etc/init.d/` 里 4 个每次开机运行但都幂等 —— 详见 [build-guide 附录 D](docs/build-guide.md)。
+最新基线：**Release [`g68-plus-2026.11.08`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08)** · 167.1 MB · sha256 `d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f`
 
-1. 构建中途取消会丢失 `dl` / `.ccache` 缓存，下次仍需重拉 feeds 与重编。
-2. 改 `docs/` 或 workflow 不会触发构建；只有改 `defconfig/` 下两个文件才会。
-3. cron 是 UTC：`0 18 * * 0` 对应**周一 02:00（北京时间）**。
-4. 仓库 60 天无提交活动，GitHub 会停用定时任务，需在 Actions 页面手动 Enable。
-5. 构建失败会**自动开 Issue**（含定时构建），正文带 run 链接、失败步骤与排查指引；同类未关闭 issue 存在时改为追加评论。
-6. 附加插件多为社区维护，刷机后建议逐项验证（quickstart / iStore / 共享 / Docker）。
-7. 第三方 feed 跟随上游 `master`，需要完全可复现构建时应锁定 commit。
+```bash
+TAG=g68-plus-2026.11.08
+FILE=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz
+BASE=https://github.com/iiibeloved/immortalwrt-rk356x/releases/download/$TAG
+
+# 直连慢就在 URL 前加代理前缀（文件内容与 sha256 完全相同）
+#   https://gh-proxy.com/   https://ghfast.top/   https://ghproxy.net/
+curl -LO "$BASE/$FILE"
+curl -LO "$BASE/sha256sums"
+sha256sum -c sha256sums --ignore-missing
+```
+
+**写入**（整盘写入，会清空目标盘）：
+
+```bash
+gunzip -k "$FILE"
+sudo dd if="${FILE%.gz}" of=/dev/sdX bs=4M conv=fsync status=progress   # /dev/sdX 换成你的设备
+```
+
+也可在 LuCI「系统 → 备份/升级」直接上传 `.img.gz`（sysupgrade 升级会保留 overlay 配置；
+首刷若要不带旧配置，请勾掉「保留配置」）。
+
+---
+
+## 7. 基线冻结与校验
+
+配置已冻结：**除显式变更请求外，所有自动/手动构建都基于同一基线**，并由 CI 强制校验。
+
+```bash
+sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
+```
+
+- 指纹清单：[docs/baseline.sha256](docs/baseline.sha256)（17 个文件：2 个 defconfig、2 个 workflow、`gen_image_generic.sh`、`files/` 全部）
+- CI 行为：不一致 → 打 `::error::` 列出差异文件并**中断构建**（防止「基线被悄悄改掉却照常出固件」）
+- 有意修改基线后必须执行：
+
+```bash
+./scripts/update-baseline.sh && sha256sum -c docs/baseline.sha256
+```
+
+---
+
+## 8. 文档索引
+
+| 文档 | 内容 |
+| --- | --- |
+| [docs/build-guide.md](docs/build-guide.md) | 详细教程：触发方式、24 步流程、产物、刷机、失败速查、13 个专题（加减包 / ss-rust / rootfs / docker 扩容 / 拆盘 / opkg 源 / NVMe / TTYD / 指示灯 / 回滚）+ 附录 A–E |
+| [docs/packages.md](docs/packages.md) | 固件包清单（552 包 + 重点应用 + 基线指纹） |
+| [docs/ci-build.md](docs/ci-build.md) | 构建方案设计、依赖来源、实测记录 |
+| [docs/baseline.sha256](docs/baseline.sha256) | 基线指纹（CI 强校验依据） |
+
+---
+
+## 9. 已知限制
+
+| 项 | 说明 |
+| --- | --- |
+| `mergerfs` | ImmortalWrt 24.10 与 small-package 均无此包，未集成（可用 diskman + 多挂载点替代） |
+| RJ45 网口灯 | 由 RTL8367S 交换芯片硬件驱动，`rtl8367b` 驱动未暴露 LED 属性，**软件无法开关**（`portled` 只控 GPIO 灯，如电源灯） |
+| 小盘设备 | eMMC 剩余 < 58 GiB 时不自动拆盘 → iStore「存储位置」为空，需手动建分区 |
+| 首启一次重启 | 若内核未即时识别新分区，`docker-disk` 会自动重启一次再接续（最多一次，防循环） |
+| 时间同步 | RK3568 无电池 RTC，开机时间可能滞后；HTTPS 拉取失败时先 `date` 检查并等待 NTP |
+| 构建耗时 | 保留 ss-rust 时约 4 h 15 min；GitHub cron 偶有延迟/跳过，已用脚本核验兜底 |
