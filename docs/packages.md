@@ -21,8 +21,8 @@
 | `files/etc/config/portled` | `042a03536f46cc1bb367e44d1c31a666277f33c67caec6f61cfc0f3b1d66cab4` |
 | `files/etc/config/ttyd` | `43666e86f2bdbfaf953a3b09bfdbf9960e6e1fff4fcd7cb687d0d257e17433e2` |
 | `files/etc/init.d/docker-dataroot` | `16ee4f4d025eff33a8d3aa195459254ca02b8bddae7ae759a04254b30d5b2108` |
-| `files/etc/init.d/docker-disk` | `6487db5efcb4a4aed6838ae705733232022caf87f619bcee0f9c9971e9677599` |
-| `files/etc/init.d/nvme-automount` | `7379fc2f83a11f15213f04c5d6cc952e29d2d0f75d7d22d6daa858f62c7c9e80` |
+| `files/etc/init.d/docker-disk` | `a01ff787fb06e7fa138a1c6986d4afa6d0f2e6f9009d9fa78a11fb894cc134d8` |
+| `files/etc/init.d/nvme-automount` | `57c9632e8a20fcfeb16d43a47c34fd25eaf2b3df02d7ab4c6d63d09278c2959f` |
 | `files/etc/init.d/portled` | `12491a12f5acf3572b791da301a1832b8a9e07eb3328854eaeb664b4e503d5d9` |
 | `files/etc/opkg/distfeeds.conf` | `a3d4d4dd7c63bd15181474622e77a439c698d415ffe1ed2ef40d4116eb07783c` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |

@@ -556,3 +556,19 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
 
 **要偏离基线时**（例如临时试别的 rootfs 大小），不要改默认值，直接 Run workflow 显式传参，
 构建产物会带 `-r<run_number>` 后缀，基线不受影响。
+
+
+## 附录 B. 基线自检（2026-11-07 全面检查结果）
+
+| 检查项 | 方法 | 结果 |
+| --- | --- | --- |
+| 脚本语法 | `sh -n` 全部 8 个脚本 + `gen_image_generic.sh` | ✅ 全部通过 |
+| 执行位 | 远程 git tree mode 检查 | ✅ init.d / uci-defaults 均 `100755`，配置文件 `100644` |
+| 开机自启 | 每个 init.d 脚本都有对应 uci-defaults `enable` | ✅ docker-disk/docker-dataroot/nvme-automount → `98-enable-custom-initd`；portled → `98-portled`；ttyd → `98-fix-ttyd` |
+| 启动顺序 | START 值 | docker-disk 58 → docker-dataroot 60 → nvme-automount 62 → portled 70 → dockerd 99 ✅ |
+| 首次启动即生效 | `98-enable-custom-initd` 在后台立即执行一次（sleep 5） | ✅ 无需重启 |
+| NVMe 支持 | 内核模块 | ✅ kmod-nvme / kmod-fs-ext4 / exfat / vfat / btrfs 已在；**本次补上 kmod-fs-f2fs、kmod-fs-xfs、kmod-fs-ntfs3** |
+| 分区脚本幂等 | 假 sysfs 冒烟测试 | ✅ 已有 p5/p6 且已格式化 → 只挂载不重格；中途失败不写完成标记，下次自动重试 |
+| fstab 安全 | 按 UUID 去重 | ✅ 不再删已有条目 |
+| ttyd | 不绑定 `@lan` | ✅ 改 LAN IP 后不会「已拒绝连接」 |
+| opkg 源 | 9 个源（官方 6 + iStoreOS 3） | ✅ 首次启动自动补 arch、必要时关签名校验 |

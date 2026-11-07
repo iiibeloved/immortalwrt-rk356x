@@ -28,7 +28,7 @@ DRYRUN="${NVME_DRYRUN:-0}"
 OFF=/etc/nvme-automount.off
 NOFMT=/etc/nvme-automount.noformat
 MIN_BLANK_MIB=8192        # 小于 8 GiB 的空白盘不自动格式化
-SUPPORTED="ext4 xfs btrfs f2fs exfat"
+SUPPORTED="ext4 xfs btrfs f2fs exfat ntfs3"
 
 log() { echo "$(date '+%F %T') $*" >> "$LOG"; logger -t nvme-automount "$*" 2>/dev/null; }
 

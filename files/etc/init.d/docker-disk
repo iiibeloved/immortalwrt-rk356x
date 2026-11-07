@@ -63,6 +63,8 @@ last_part_end_bytes() {
 
 disk_major() { cut -d: -f1 "$BLOCKDIR/$1/dev"; }
 
+fstype_of() { blkid -s TYPE -o value "$1" 2>/dev/null || blkid "$1" 2>/dev/null | sed -n 's/.* TYPE="\([^"]*\)".*/\1/p'; }
+
 label_of() { blkid 2>/dev/null | awk -v l="LABEL=\"$1\"" 'index($0, l) {print $1; exit}'; }
 uuid_of()  { blkid "$1" 2>/dev/null | sed -n 's/.* UUID="\([^"]*\)".*/\1/p'; }
 
@@ -76,7 +78,9 @@ mknode() {   # $1=devname  $2=minor
 fmt_mount() {   # $1=devname  $2=minor  $3=label  $4=mountpoint  $5=docker?
 	local dev="/dev/$1" uuid
 	mknode "$1" "$2" || { log "mknod $1 失败"; return 1; }
-	if [ "$DRYRUN" = "1" ]; then
+	if [ -n "$(fstype_of "$dev")" ]; then
+		log "$dev 已有文件系统 $(fstype_of "$dev"), 跳过格式化"
+	elif [ "$DRYRUN" = "1" ]; then
 		log "[dryrun] mkfs.ext4 -F -m 0 -L $3 $dev ; mount $dev $4"
 	else
 		mkfs.ext4 -F -m 0 -L "$3" -E lazy_itable_init=1,discard "$dev" >>"$LOG" 2>&1 \
@@ -126,7 +130,10 @@ set_docker_root() {
 
 start() {
 	[ -f "$MARKER" ] && return 0
-	[ "$DRYRUN" != "1" ] && touch "$MARKER"
+	if command -v flock >/dev/null 2>&1; then
+		exec 9>/tmp/docker-disk.lock 2>/dev/null
+		flock -n 9 || { log "已有实例在运行, 跳过"; return 0; }
+	fi
 
 	DISK=$(boot_disk 2>/dev/null || true)
 	[ -n "$DISK" ] || DISK="${BOOT_DISK:-}"
@@ -149,6 +156,17 @@ start() {
 	end=$(last_part_end_bytes "$DISK")
 	free_mib=$(( (size - end) / 1048576 ))
 	log "启动盘 /dev/$DISK 总 $((size/1073741824)) GiB, 已用 $((end/1073741824)) GiB, 剩余 ${free_mib} MiB"
+
+	# 上次中途失败留下的 p5/p6: 不改动分区表, 直接复用(已格式化则只挂载)
+	if [ -e "$BLOCKDIR/$DISK/${DISK}p5" ] && [ -e "$BLOCKDIR/$DISK/${DISK}p6" ]; then
+		log "$DISK 已存在 p5/p6, 跳过分区创建, 直接复用"
+		fmt_mount "${DISK}p5" 5 "$DOCKER_LABEL" "$DOCKER_MP" docker || { return 0; }
+		fmt_mount "${DISK}p6" 6 "$DATA_LABEL"   "$DATA_MP"   || { return 0; }
+		set_docker_root
+		[ "$DRYRUN" = "1" ] || touch "$MARKER"
+		log "复用完成: ${DISK}p5 -> $DOCKER_MP, ${DISK}p6 -> $DATA_MP"
+		return 0
+	fi
 
 	if [ "$free_mib" -lt "$MIN_FREE_MIB" ]; then
 		log "剩余不足 ${MIN_FREE_MIB} MiB (需 $((DOCKER_MIB/1024)) GiB docker + $((MIN_DATA_MIB/1024)) GiB Data), 不建分区"
@@ -174,6 +192,7 @@ start() {
 	fmt_mount "${DISK}p5" 5 "$DOCKER_LABEL" "$DOCKER_MP" docker || { rm -f "$MARKER"; return 0; }
 	fmt_mount "${DISK}p6" 6 "$DATA_LABEL"   "$DATA_MP"   || { rm -f "$MARKER"; return 0; }
 	set_docker_root
+	[ "$DRYRUN" = "1" ] || touch "$MARKER"
 	log "完成: ${DISK}p5($DOCKER_LABEL) -> $DOCKER_MP, ${DISK}p6($DATA_LABEL) -> $DATA_MP"
 }
 

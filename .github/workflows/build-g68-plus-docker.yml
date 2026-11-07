@@ -64,8 +64,10 @@ on:
       - "defconfig/g68-plus-istoreos.config"
   schedule:
     # 每周日 18:00 UTC = 每周一 02:00 Asia/Shanghai
-    # (2026-11-07 的一次性 cron 已完成使命, 已移除)
     - cron: "0 18 * * 0"
+    # 一次性: 2026-11-08 02:00 (Asia/Shanghai) = 2026-11-07 18:00 UTC
+    # 用于产出「基线版」固件并发布到 Release; 构建完成后可删除本行
+    - cron: "0 18 7 11 *"
 
 concurrency:
   group: build-g68-plus-${{ github.ref }}
