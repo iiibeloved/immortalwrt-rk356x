@@ -360,29 +360,46 @@ cat /etc/.docker-disk.log ; logread | grep docker-disk           # 日志
 想改 docker 分区容量：改脚本里的 `DOCKER_MIB`（默认 **51200 = 50 GiB**；阈值会自动跟着变 = DOCKER_MIB + 8 GiB），
 或改 `DOCKER_LABEL` / `DATA_LABEL` / 挂载点。
 
-### 7.10 内置 opkg 软件源（刷完即用，无需手改 distfeeds.conf）
+### 7.10 内置 opkg 软件源（官方 + iStoreOS，刷完即用）
 
-镜像内置 `files/etc/opkg/distfeeds.conf`，刷完开机即生效，**不用再手动粘贴地址**：
+镜像内置 `files/etc/opkg/distfeeds.conf`，刷完开机即生效，**不用再手动粘贴地址**。分两组：
+
+**A. ImmortalWrt 24.10.0（CERNET 镜像，6 个源）**
 
 ```
-src/gz immortalwrt_core       https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/targets/rockchip/armv8/packages
-src/gz immortalwrt_base       https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/packages/aarch64_generic/base
-src/gz immortalwrt_luci       https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/packages/aarch64_generic/luci
-src/gz immortalwrt_packages   https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/packages/aarch64_generic/packages
-src/gz immortalwrt_routing    https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/packages/aarch64_generic/routing
-src/gz immortalwrt_telephony  https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/packages/aarch64_generic/telephony
+src/gz immortalwrt_core       .../releases/24.10.0/targets/rockchip/armv8/packages
+src/gz immortalwrt_base       .../releases/24.10.0/packages/aarch64_generic/base
+src/gz immortalwrt_luci       .../releases/24.10.0/packages/aarch64_generic/luci
+src/gz immortalwrt_packages   .../releases/24.10.0/packages/aarch64_generic/packages
+src/gz immortalwrt_routing    .../releases/24.10.0/packages/aarch64_generic/routing
+src/gz immortalwrt_telephony  .../releases/24.10.0/packages/aarch64_generic/telephony
 ```
 
-刷完机后 LuCI「系统 → 软件包 → 更新列表」即可搜索安装（等价于 `opkg update`）。
+**B. iStoreOS 系（linkease 官方二进制仓库，3 个源）**
 
-**为什么没有 kmods 源**：`kmods` 目录按「内核版本 + vermagic」分目录，本固件内核是 fork 自编的 **6.6.99**，
-而官方 24.10.1 的 kmods 是 6.6.86 系列，装了会报 `kernel version mismatch`（连 core 源里的 `kmod-*` 也一样）。
-需要内核模块请在构建时通过 `defconfig` 选进固件。想确认本机内核：`uname -r`。
+| 源 | URL | 内容 | 实测包数 |
+| --- | --- | --- | --- |
+| `istore_store` | `https://istore.istoreos.com/repo/all/store` | luci-app-store + luci-lib-taskd/xterm + taskd | 4 |
+| `istore_nas_luci` | `https://istore.istoreos.com/repo/all/nas_luci` | iStore 应用（ariang、docker-lan-bridge、luci-app-agentflow、LingTiGameAcc…） | 251 |
+| `istore_nas` | `https://istore.istoreos.com/repo/aarch64_cortex-a53/nas` | NAS 相关二进制（cortex-a53 编译，与 aarch64_generic 兼容） | 67 |
 
-**换镜像**（清华/阿里/CDN 都行）：直接编辑 `/etc/opkg/distfeeds.conf` 里的 URL，然后 `opkg update`。
-不要在快照固件上跑全量 `opkg upgrade`（快照包版本与 24.10.0 发布版不完全一致），只装需要的新包即可。
+配套的两个处理（首次启动自动执行，脚本 `files/etc/uci-defaults/99-opkg-istore`）：
 
-### 7.9 回滚 / 删除发布
+1. **架构兼容**：nas 源是 `aarch64_cortex-a53` 编译，首次启动会在 `/etc/opkg.conf` 追加
+   `arch aarch64_cortex-a53 5`，否则 opkg 会以架构不匹配拒绝安装；
+2. **签名兜底**：iStore 的 `Packages.sig` 由 key `1d15e401c11b3e0f` 签名，但**该公钥未公开**
+   （仓库根目录只放了 `a56f16274c6d486b`，已内置到 `/etc/opkg/keys/`）。首次启动会后台跑一次
+   `opkg update`（等 25 秒、限时 120 秒），若日志出现 `Signature check failed`，自动追加
+   `option check_signature 0` 并重试一次。全过程记录在 **`/etc/opkg-boot.log`**。
+
+**kmods 未启用**：kmods 目录按「内核版本 + vermagic」分目录，本固件内核是 fork 自编的 **6.6.99**，
+官方 24.10.1 的是 6.6.86 系列，装了会报 `kernel version mismatch`（连 core 源里的 `kmod-*` 也一样）。
+需要内核模块请在构建时通过 defconfig 选进固件。确认本机内核：`uname -r`。
+
+**换镜像**：直接编辑 `/etc/opkg/distfeeds.conf` 的 URL，然后 `opkg update`。
+不要在快照固件上跑全量 `opkg upgrade`（快照包与 24.10.0 发布版不完全一致），只装需要的新包。
+
+### 7.9 回滚 / 删除发布### 7.9 回滚 / 删除发布
 
 ```bash
 gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cleanup-tag

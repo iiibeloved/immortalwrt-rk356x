@@ -105,7 +105,7 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 - **Samba4**：`samba4-server` + `luci-app-samba4`
 - **Docker**：`dockerd` / `containerd` / `runc` / `docker`（原 defconfig 只有 dockerman 界面，已补齐引擎）
 - **代理组件**：`shadowsocks-rust-sslocal/ssserver`（默认启用；不想要可在附加配置里关闭，省约 2 小时）
-- **软件源**：内置 `/etc/opkg/distfeeds.conf`（CERNET 24.10.0 六个源），刷完即可在「系统 → 软件包」安装；kmods 因自编内核 6.6.99 不兼容官方源，故未启用
+- **软件源**：内置 `/etc/opkg/distfeeds.conf` —— ImmortalWrt 24.10.0（CERNET，6 源）+ **iStoreOS 官方仓库（store / nas_luci / nas，322 个包）**，刷完即可在「系统 → 软件包」安装；首次启动自动补 `arch aarch64_cortex-a53`、必要时自动关闭签名校验（日志 `/etc/opkg-boot.log`）；kmods 因自编内核 6.6.99 与官方 6.6.86 不匹配而未启用
 
 第三方源：`kenzok8/small-package`（只按名安装需要的包，避免与官方源同名冲突）、`DustReliant/luci-app-filetransfer`（本地单包引入）。
 

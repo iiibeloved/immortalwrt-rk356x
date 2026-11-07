@@ -1,0 +1,22 @@
+#!/bin/sh
+# 首次启动: 让 opkg 能吃 iStoreOS 的 aarch64_cortex-a53 包, 并预热索引。
+# 若 iStore 源签名校验失败(官方公钥未公开), 自动关闭签名校验并重试一次。
+# 日志: /etc/opkg-boot.log
+LOG=/etc/opkg-boot.log
+
+# 1) 架构兼容: nas 源是 cortex-a53 编译, 与本机 aarch64_generic 二进制兼容
+grep -q '^arch aarch64_cortex-a53 ' /etc/opkg.conf 2>/dev/null || \
+	echo 'arch aarch64_cortex-a53 5' >> /etc/opkg.conf
+
+# 2) 后台预热(等网络起来; 失败不影响开机)
+(
+	sleep 25
+	timeout 120 opkg update >"$LOG" 2>&1
+	if grep -qi 'Signature check failed' "$LOG"; then
+		grep -q '^option check_signature 0' /etc/opkg.conf 2>/dev/null || \
+			echo 'option check_signature 0' >> /etc/opkg.conf
+		timeout 180 opkg update >>"$LOG" 2>&1
+	fi
+) &
+
+exit 0
