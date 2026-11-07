@@ -403,6 +403,35 @@ src/gz immortalwrt_telephony  .../releases/24.10.0/packages/aarch64_generic/tele
 **换镜像**：直接编辑 `/etc/opkg/distfeeds.conf` 的 URL，然后 `opkg update`。
 不要在快照固件上跑全量 `opkg upgrade`（快照包与 24.10.0 发布版不完全一致），只装需要的新包。
 
+### 7.11 NVMe 硬盘自动检测与挂载
+
+固件内置 `/etc/init.d/nvme-automount`（START=62，每次开机执行、幂等），自动处理 `/dev/nvme*n1`：
+
+| 情况 | 行为 |
+| --- | --- |
+| 已有分区 + 受支持文件系统（ext4 / xfs / btrfs / f2fs / exfat） | 挂到 `/mnt/nvme0`（多分区依次 `/mnt/nvme0_pN`），按 **UUID** 写入 fstab，后续开机由 block-mount 自动挂载 |
+| 磁盘完全空白（无分区表、无文件系统签名）且 ≥ 8 GiB | 自动建 **GPT + 单分区 + ext4**（卷标 `NVME0`）后挂载 |
+| 有分区但文件系统不受支持（如 NTFS） | **只记日志，不格式化、不挂载**（保护数据） |
+| 小于 8 GiB 的空白盘 | 跳过格式化 |
+
+日志：`/etc/nvme-automount.log`、`logread | grep nvme-automount`。
+快捷开关（在 `/etc` 下建文件即可，开机读取）：
+
+```sh
+touch /etc/nvme-automount.off       # 完全关闭
+touch /etc/nvme-automount.noformat  # 只挂载已有文件系统, 绝不分区/格式化(推荐给带数据的盘)
+```
+
+**与 docker 的关系**：当前 docker 数据目录固定走 eMMC 的 `/mnt/ext_relay/docker`（50 GiB，`docker-disk` 在 START=58 已设好，
+`nvme-automount` 在 62 才跑，所以不会抢占）。想把 docker 放到 NVMe 上：
+
+```sh
+uci set dockerd.globals.data_root='/mnt/nvme0/docker'
+uci commit dockerd && /etc/init.d/dockerd restart
+```
+
+（也可以在镜像里把 `nvme-automount` 的 `START` 调到 56，让 `docker-dataroot` 自动优先选 NVMe。）
+
 ### 7.9 回滚 / 删除发布### 7.9 回滚 / 删除发布
 
 ```bash

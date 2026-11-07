@@ -1,0 +1,132 @@
+#!/bin/sh /etc/rc.common
+# =============================================================================
+#  自动检测 NVMe 硬盘并挂载
+#
+#  行为(每次开机执行, 幂等):
+#    1) 枚举 /dev/nvme*n1 设备;
+#    2) 已有分区且文件系统受支持(ext4/xfs/btrfs/f2fs/exfat) -> 挂到 /mnt/nvmeX,
+#       以 UUID 写入 fstab, 之后由 block-mount 自动挂载;
+#    3) 磁盘完全空白(无分区表、无文件系统签名) -> 建 GPT + 单分区 + ext4
+#       (卷标 NVME<X>), 再挂到 /mnt/nvmeX;
+#    4) 有分区但文件系统不支持(如 NTFS) -> 只记录日志, 不动数据、不格式化。
+#
+#  开关(建在 /etc 下即可, 开机脚本读取):
+#    /etc/nvme-automount.off       完全关闭本功能
+#    /etc/nvme-automount.noformat  只挂载, 绝不创建分区/格式化(推荐给有数据的盘)
+#
+#  日志: /etc/nvme-automount.log ; logread | grep nvme-automount
+# =============================================================================
+
+START=62          # 晚于 docker-disk(58) / docker-dataroot(60), 早于 dockerd(99)
+STOP=10
+
+: "${BLOCKDIR:=/sys/class/block}"
+: "${MOUNTS:=/proc/mounts}"
+: "${LOG:=/etc/nvme-automount.log}"
+: "${MNTPREFIX:=/mnt}"   # 挂载点前缀(便于测试)
+DRYRUN="${NVME_DRYRUN:-0}"
+OFF=/etc/nvme-automount.off
+NOFMT=/etc/nvme-automount.noformat
+MIN_BLANK_MIB=8192        # 小于 8 GiB 的空白盘不自动格式化
+SUPPORTED="ext4 xfs btrfs f2fs exfat"
+
+log() { echo "$(date '+%F %T') $*" >> "$LOG"; logger -t nvme-automount "$*" 2>/dev/null; }
+
+uuid_of() { blkid "$1" 2>/dev/null | sed -n 's/.* UUID="\([^"]*\)".*/\1/p'; }
+fstype_of() { blkid -s TYPE -o value "$1" 2>/dev/null || blkid "$1" 2>/dev/null | sed -n 's/.* TYPE="\([^"]*\)".*/\1/p'; }
+
+persist_fstab() {   # $1=uuid  $2=mountpoint  $3=fstype
+	[ -n "$1" ] || return 0
+	[ "$DRYRUN" = "1" ] && { log "[dryrun] fstab uuid=$1 -> $2 ($3)"; return 0; }
+	if uci -q show fstab 2>/dev/null | grep -q "\.uuid='$1'"; then
+		return 0
+	fi
+	uci -q add fstab mount >/dev/null 2>&1 || return 0
+	uci -q set "fstab.@mount[-1].uuid=$1"
+	uci -q set "fstab.@mount[-1].target=$2"
+	uci -q set "fstab.@mount[-1].fstype=$3"
+	uci -q set "fstab.@mount[-1].options=noatime"
+	uci -q set "fstab.@mount[-1].enabled=1"
+	uci -q commit fstab
+}
+
+mount_part() {      # $1=装置  $2=挂载点
+	local dev="$1" mp="$2" fs
+	fs=$(fstype_of "$dev")
+	case " $SUPPORTED " in
+		*" $fs "*) ;;
+		*) log "跳过 $dev: 文件系统 '$fs' 不受支持(不格式化, 保护数据)"; return 1 ;;
+	esac
+	mkdir -p "$mp" 2>/dev/null || { log "创建 $mp 失败"; return 1; }
+	if [ "$DRYRUN" = "1" ]; then
+		log "[dryrun] mount -t $fs $dev $mp"
+	else
+		mountpoint -q "$mp" || mount -t "$fs" "$dev" "$mp" 2>>"$LOG" || \
+			{ log "挂载 $dev -> $mp 失败"; return 1; }
+	fi
+	persist_fstab "$(uuid_of "$dev")" "$mp" "$fs"
+	log "已挂载 $dev ($fs) -> $mp"
+	return 0
+}
+
+make_blank() {      # $1=磁盘装置  $2=序号
+	local disk="$1" idx="$2" size_mib part
+	size_mib=$(( $(cat "$BLOCKDIR/$(basename "$disk")/size" 2>/dev/null || echo 0) * 512 / 1048576 ))
+	[ "$size_mib" -ge "$MIN_BLANK_MIB" ] || { log "$disk 仅 ${size_mib} MiB, 跳过格式化"; return 1; }
+	log "$disk 是空白盘(${size_mib} MiB), 创建 GPT + ext4 (卷标 NVME$idx)"
+	if [ "$DRYRUN" = "1" ]; then
+		log "[dryrun] parted -s $disk mklabel gpt ; mkpart primary ext4 0% 100% ; mkfs.ext4 -L NVME$idx ${disk}p1"
+		return 0
+	fi
+	parted -s "$disk" mklabel gpt >>"$LOG" 2>&1 || { log "mklabel 失败"; return 1; }
+	parted -s "$disk" mkpart primary ext4 0% 100% >>"$LOG" 2>&1 || { log "mkpart 失败"; return 1; }
+	part="${disk}p1"
+	# 内核可能还没生成节点
+	[ -b "$part" ] || { mknod "$part" b "$(cut -d: -f1 "$BLOCKDIR/$(basename "$disk")/dev")" 1 2>>"$LOG"; }
+	mkfs.ext4 -F -m 0 -L "NVME$idx" "$part" >>"$LOG" 2>&1 || { log "mkfs 失败"; return 1; }
+	return 0
+}
+
+start() {
+	[ -f "$OFF" ] && { log "已关闭(/etc/nvme-automount.off), 跳过"; return 0; }
+
+	local d n=0 disk parts p idx mp
+	# 等 NVMe 枚举(最多 20 秒)
+	i=0
+	while [ "$i" -lt 4 ]; do
+		set -- "$BLOCKDIR"/nvme*n1
+		[ -e "$1" ] && break
+		sleep 5
+		i=$((i + 1))
+	done
+
+	for d in "$BLOCKDIR"/nvme*n1; do
+		[ -e "$d" ] || continue
+		disk="/dev/$(basename "$d")"
+		idx=$n; n=$((n + 1))
+		mp="$MNTPREFIX/nvme$idx"
+		log "发现 NVMe 磁盘: $disk"
+
+		parts=$(ls "$d" 2>/dev/null | grep -E '^'"$(basename "$d")"'p[0-9]+$' | tr '\n' ' ')
+		if [ -z "$parts" ]; then
+			if [ -f "$NOFMT" ]; then
+				log "$disk 无分区, 且存在 noformat 开关, 跳过"
+				continue
+			fi
+			make_blank "$disk" "$idx" || continue
+			parts="$(basename "$d")p1 "
+		fi
+
+		local first=1
+		for p in $parts; do
+			if [ "$first" = "1" ]; then
+				mount_part "/dev/$p" "$mp"
+			else
+				mount_part "/dev/$p" "${mp}_${p##*p}"
+			fi
+			first=0
+		done
+	done
+}
+
+stop() { :; }
