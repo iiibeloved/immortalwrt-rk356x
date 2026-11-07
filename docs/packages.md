@@ -13,6 +13,20 @@
 | `scripts/gen_image_generic.sh` | `f6d59494a9c88f5fe4e2175f00067eb5b5160a32b903b0a16f726a7b99903e98` |
 | 固件镜像 `*.img.gz` | `0ecc1541a381669861c45f8a505d077e97a986697064a4ab5d8fddfc8d3a9e96` |
 
+
+### 内置脚本 / 配置文件指纹（`files/` 目录，随镜像打进 rootfs）
+
+| 文件 | sha256 |
+| --- | --- |
+| `files/etc/init.d/docker-dataroot` | `16ee4f4d025eff33a8d3aa195459254ca02b8bddae7ae759a04254b30d5b2108` |
+| `files/etc/init.d/docker-disk` | `6487db5efcb4a4aed6838ae705733232022caf87f619bcee0f9c9971e9677599` |
+| `files/etc/init.d/nvme-automount` | `7379fc2f83a11f15213f04c5d6cc952e29d2d0f75d7d22d6daa858f62c7c9e80` |
+| `files/etc/opkg/distfeeds.conf` | `a3d4d4dd7c63bd15181474622e77a439c698d415ffe1ed2ef40d4116eb07783c` |
+| `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |
+| `files/etc/uci-defaults/99-opkg-istore` | `d6004e6311752baa9c49467f68ac3f1b7edf859bcee8679c6441fa9ed3f9ffc6` |
+
+> 上面这几张表合起来就是「基线」的完整指纹：改了任何一个文件，对应 sha256 都会变，可据此判断仓库是否偏离基线。
+
 ## 重点应用（功能入口）
 
 ### 系统 / 初始化
