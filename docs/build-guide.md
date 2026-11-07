@@ -360,6 +360,28 @@ cat /etc/.docker-disk.log ; logread | grep docker-disk           # 日志
 想改 docker 分区容量：改脚本里的 `DOCKER_MIB`（默认 **51200 = 50 GiB**；阈值会自动跟着变 = DOCKER_MIB + 8 GiB），
 或改 `DOCKER_LABEL` / `DATA_LABEL` / 挂载点。
 
+### 7.10 内置 opkg 软件源（刷完即用，无需手改 distfeeds.conf）
+
+镜像内置 `files/etc/opkg/distfeeds.conf`，刷完开机即生效，**不用再手动粘贴地址**：
+
+```
+src/gz immortalwrt_core       https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/targets/rockchip/armv8/packages
+src/gz immortalwrt_base       https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/packages/aarch64_generic/base
+src/gz immortalwrt_luci       https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/packages/aarch64_generic/luci
+src/gz immortalwrt_packages   https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/packages/aarch64_generic/packages
+src/gz immortalwrt_routing    https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/packages/aarch64_generic/routing
+src/gz immortalwrt_telephony  https://mirrors.cernet.edu.cn/immortalwrt/releases/24.10.0/packages/aarch64_generic/telephony
+```
+
+刷完机后 LuCI「系统 → 软件包 → 更新列表」即可搜索安装（等价于 `opkg update`）。
+
+**为什么没有 kmods 源**：`kmods` 目录按「内核版本 + vermagic」分目录，本固件内核是 fork 自编的 **6.6.99**，
+而官方 24.10.1 的 kmods 是 6.6.86 系列，装了会报 `kernel version mismatch`（连 core 源里的 `kmod-*` 也一样）。
+需要内核模块请在构建时通过 `defconfig` 选进固件。想确认本机内核：`uname -r`。
+
+**换镜像**（清华/阿里/CDN 都行）：直接编辑 `/etc/opkg/distfeeds.conf` 里的 URL，然后 `opkg update`。
+不要在快照固件上跑全量 `opkg upgrade`（快照包版本与 24.10.0 发布版不完全一致），只装需要的新包即可。
+
 ### 7.9 回滚 / 删除发布
 
 ```bash
