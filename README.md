@@ -108,6 +108,7 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 - **代理组件**：`shadowsocks-rust-sslocal/ssserver`（默认启用；不想要可在附加配置里关闭，省约 2 小时）
 - **监控/管控**：`luci-app-nlbwmon`（流量）、`luci-app-eqosplus`（限速）、`luci-app-timecontrol`、`luci-app-control-webrestriction`、`luci-app-control-weburl`
 - **存储**：`luci-app-nfs` + `nfs-kernel-server`、`luci-app-cifs-mount` + `kmod-fs-cifs` + `cifsmount`、`luci-app-diskman`（含 SMART 页签）
+- **指示灯开关**：`/etc/config/portled` 可关电源灯等 GPIO 灯；RJ45 网口灯由 RTL8367S 硬件驱动，软件不可关（详见 build-guide 7.13）
 - **TTYD 终端防坑**：内置 `ttyd` 配置不绑定 `@lan`，改 LAN IP 后终端不会出现「已拒绝连接」（并带首次启动自动修正脚本）
 - **NVMe 自动挂载**：开机检测 `/dev/nvme*n1`，已有文件系统直接挂 `/mnt/nvme0`（写 fstab/UUID）；空白盘自动 GPT+ext4（卷标 `NVME0`）；不支持的文件系统不格式化
 - **Home Assistant**：`luci-app-homeassistant` + 中文语言包（Docker 方式，镜像首次启动拉取）

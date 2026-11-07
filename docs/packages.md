@@ -18,14 +18,17 @@
 
 | 文件 | sha256 |
 | --- | --- |
+| `files/etc/config/portled` | `e4c734e74e7e3486124441e453e833b2a902538eb79b5b1ab70e3e2336d5c30c` |
 | `files/etc/config/ttyd` | `43666e86f2bdbfaf953a3b09bfdbf9960e6e1fff4fcd7cb687d0d257e17433e2` |
 | `files/etc/init.d/docker-dataroot` | `16ee4f4d025eff33a8d3aa195459254ca02b8bddae7ae759a04254b30d5b2108` |
 | `files/etc/init.d/docker-disk` | `6487db5efcb4a4aed6838ae705733232022caf87f619bcee0f9c9971e9677599` |
 | `files/etc/init.d/nvme-automount` | `7379fc2f83a11f15213f04c5d6cc952e29d2d0f75d7d22d6daa858f62c7c9e80` |
+| `files/etc/init.d/portled` | `029d06757bd438ce0e7330c6f9eed541afa1e2c27f07bb9313d25ed1693dcbcd` |
 | `files/etc/opkg/distfeeds.conf` | `a3d4d4dd7c63bd15181474622e77a439c698d415ffe1ed2ef40d4116eb07783c` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |
 | `files/etc/uci-defaults/98-enable-custom-initd` | `3700abd9fc5ce141bd643a43703a831a25946ec4720307521f8ad978d2384a7f` |
 | `files/etc/uci-defaults/98-fix-ttyd` | `3ea3fc0ba31c8f2efa3bf43422589a695bc5d713d3f78a144581986e0acc0f59` |
+| `files/etc/uci-defaults/98-portled` | `91975c4b61ab5b3545f4e0698600c744497cf03496c814860bf8ffb643616a15` |
 | `files/etc/uci-defaults/99-opkg-istore` | `d6004e6311752baa9c49467f68ac3f1b7edf859bcee8679c6441fa9ed3f9ffc6` |
 
 > 上面这几张表合起来就是「基线」的完整指纹：改了任何一个文件，对应 sha256 都会变，可据此判断仓库是否偏离基线。
