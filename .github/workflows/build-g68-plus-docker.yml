@@ -293,16 +293,15 @@ jobs:
 
           # 预期关闭的包 (附加配置里的 "# CONFIG_PACKAGE_x is not set")
           if [ -n "${EXTRA_CONFIG:-}" ] && [ -f "$EXTRA_CONFIG" ]; then
-            grep -oE '^# CONFIG_PACKAGE_[A-Za-z0-9_.+-]+ is not set$' "$EXTRA_CONFIG" 2>/dev/null \
-              | sed -e 's/^# CONFIG_PACKAGE_//' -e 's/ is not set$//' \
-              | while read -r p; do
+            OFF=$(grep -oE '^# CONFIG_PACKAGE_[A-Za-z0-9_.+-]+ is not set$' "$EXTRA_CONFIG" 2>/dev/null || true)
+            for p in $OFF; do
                   if grep -qx "CONFIG_PACKAGE_${p}=y" .config; then
                     echo "| \`${p}\` | ⚠️ 预期关闭但仍启用 |" >> "$GITHUB_STEP_SUMMARY"
                     echo "::warning::附加配置要求关闭 ${p}, 但它仍是 =y (被其它包依赖拉起?)"
                   else
                     echo "| \`${p}\` | ⛔ 已按预期关闭 |" >> "$GITHUB_STEP_SUMMARY"
                   fi
-                done
+            done
           fi
 
       # ---------------------------------------------------------------------
