@@ -11,7 +11,7 @@
 
 | 项目 | 值 |
 | --- | --- |
-| **下次自动构建** | **2026-11-09 02:00（周一，北京时间）** · cron `0 18 * * 0`（UTC 周日 18:00）· 约 4 小时（含 ss-rust） |
+| **下次构建** | **2026-11-08 02:00（一次性基线构建）**，成功后自动发 Release；之后每周一 02:00 定时（cron `0 18 * * 0`）· 约 3.5–4 小时（含 ss-rust） |
 | 想立即构建 | Actions → `Build G68-PLUS (iStoreOS style)` → **Run workflow**（≈ 2.5 小时） |
 | 最近一次成功构建 | [run #42270932303](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42270932303)（2026-11-07 02:28 → 05:05，157 分钟） |
 | 最近一次发布 | [g68-plus-2026.11.07](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.07)（165.4 MB，分区 16/200/4096） |
@@ -19,7 +19,7 @@
 | 下次构建预期 | ≈ 2.5 小时；成功后自动发布 `g68-plus-2026.11.09` Release（免登录直链） |
 | 构建失败 | 自动开 Issue：标题 `CI 构建失败: … #<run>`，正文含失败步骤、run 链接与排查指引；同类未关闭则追加评论 |
 | 详细步骤 | [docs/build-guide.md](docs/build-guide.md)（触发方式 / 24 步流程 / 失败速查表 / 注意事项） |
-| **固件包清单** | [docs/packages.md](docs/packages.md)（当前基线 **549 个包**，含重点应用说明与全量版本表） |
+| **固件包清单** | [docs/packages.md](docs/packages.md)（上一版 **549 个包**；11-08 版新增 3 个 kmod，构建后刷新） |
 
 ---
 
@@ -84,8 +84,8 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 > 指到外挂盘（`<挂载点>/docker`，要求剩余 ≥8 GiB 的 ext4/btrfs/xfs/f2fs）；没有外挂盘时保持 `/opt/docker`。
 > 手工设置过 `data_root` 则不再自动改动。
 >
-> 另外镜像内置 `/etc/init.d/docker-disk`：**首次启动**会把 eMMC 上镜像之外的剩余空间（≥28 GiB 时）拆成两块——
-> **50 GiB ext4（卷标 `ext_relay`）挂 `/mnt/ext_relay` 给 docker**，其余 ext4（卷标 `Data`）挂 `/mnt/data` 作共享盘；
+> 另外镜像内置 `/etc/init.d/docker-disk`：**首次启动**会把 eMMC 上镜像之外的剩余空间（≥58 GiB 时）拆成两块——
+> **50 GiB ext4（卷标 `ext_relay`）挂 `/mnt/ext_relay` 给 docker**，其余 ext4（卷标 `Data`）挂 `/mnt/data` 作共享盘（iStore 安装时选它）；
 > 幂等、只追加不改动已有分区、失败自动回退 `/opt/docker`；关闭方式 `touch /etc/.docker-disk.done`。详见 build-guide 7.8。
 
 分区布局：`kernel 16 MiB + rootfs 200 MiB + rootfs_data 4096 MiB`，整盘镜像约 **4.3 GiB**，介质 ≥5 GB（8 GB 卡可用）。
@@ -123,7 +123,7 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 | 文档 | 内容 |
 | --- | --- |
 | [docs/build-guide.md](docs/build-guide.md) | **下次编译详细教程**：触发方式、24 步流程与实测耗时、产物下载、刷机、失败速查表、12 条注意事项、30 秒检查清单 |
-| [docs/packages.md](docs/packages.md) | **固件包清单**（冻结基线 549 包，重点应用 + 全量分类表 + 基线指纹） |
+| [docs/packages.md](docs/packages.md) | **固件包清单**（重点应用 + 全量分类表 + 基线指纹；随每次成功构建刷新） |
 | [docs/ci-build.md](docs/ci-build.md) | 构建方案设计、依赖来源表、实测记录与已踩过的坑 |
 | [.github/workflows/publish-release.yml](.github/workflows/publish-release.yml) | 把任意历史 run 的 artifact 补发到指定 Release |
 

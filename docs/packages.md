@@ -1,6 +1,10 @@
 # 固件包清单（冻结基线 · 2026-11-07）
 
-本清单由构建产物 `immortalwrt-rockchip-armv8-nsy_g68-plus.manifest` 直接生成（非手写），对应 run [#42337188896](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42337188896) 与 Release [`g68-plus-2026.11.07-r12`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.07-r12)。
+本清单由构建产物 `immortalwrt-rockchip-armv8-nsy_g68-plus.manifest` 直接生成（非手写）。
+
+- **上一版产物**：run [#42337188896](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42337188896) · Release [`g68-plus-2026.11.07-r12`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.07-r12) · **549 个包**
+- **下一次构建（2026-11-08 02:00）**：配置新增 `kmod-fs-f2fs` / `kmod-fs-xfs` / `kmod-fs-ntfs3`，预计 **552 个包**；
+  成功发布后本文档会按新 manifest 刷新（届时包数、分类统计、指纹表同步更新）
 
 **当前配置为最终基线：此后定时构建与手动构建均基于此配置。**
 

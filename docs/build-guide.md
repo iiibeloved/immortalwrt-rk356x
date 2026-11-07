@@ -95,31 +95,33 @@ gh run list --repo iiibeloved/immortalwrt-rk356x --limit 3
 
 ## 2. 编译过程（24 个步骤，按实际执行顺序）
 
-| # | 步骤 | 实测耗时 | 说明 |
+| # | 步骤 | 参考耗时 | 说明 |
 | --- | --- | --- | --- |
-| 1–2 | Set up job / 释放磁盘空间 | 2–10 min | 删掉 runner 上的 dotnet、Android SDK 等腾空间 |
-| 3 | 检出源码 | <1 min | `fetch-depth: 1` |
-| 4 | 校验配置并打印目标 | <1 min | 不存在直接 fail-fast |
+| 1 | 释放磁盘空间 | 1–3 min | 删 runner 上的 dotnet/Android SDK 等 |
+| 2 | 检出源码 | <1 min | `fetch-depth: 1` |
+| 3 | 修正内置脚本的可执行位 | <1 min | `files/` 下脚本 `chmod +x` 兜底 |
+| 4 | 校验配置并打印目标 | <1 min | defconfig 不存在直接 fail-fast |
 | 5 | 安装编译依赖 | 2–10 min | 含 `python3-pyelftools`（RK3568 u-boot 必需） |
-| 6–7 | 生成 feeds.conf / 更新并安装官方 feeds | 3–8 min | 4 个官方源全量安装 |
-| 8 | 引入第三方 feed（`kenzok8/small-package`）并选择性安装 | 2–3 min | 只装需要的包，避免同名包覆盖 |
-| 9 | 引入 `luci-app-filetransfer`（本地 `package/`） | <1 min | 第三方单包，直连 clone |
-| 10 | 应用 defconfig + 附加配置 | <1 min | `cp` → 追加 → `make defconfig` |
-| 11 | 校验宿主机依赖（`make prereq`） | 1–2 min | 提前暴露 pyelftools 这类问题 |
-| 12 | 校验附加包是否生效 | <1 min | 生成 Job Summary 表格：✅ / ⚠️ / ⛔ |
-| 13 | 缓存 dl 与 ccache | <1 min | 命中缓存可显著提速 |
-| 14 | 下载软件包源码 | 6–13 min | `make download` |
-| 15 | 构建工具链（tools + toolchain） | 30–35 min | 产出 `aarch64-openwrt-linux-musl-gcc` |
-| 16 | 修复 rust vendor 校验并预编译 rust | **0（自动跳过）** / 118 min | 当前配置无 rust 组件 → 直接跳过 |
-| 17 | 编译固件（`make world` 剩余部分） | 60–75 min | 内核 + u-boot/ATF + 450+ 包 + 镜像打包 |
-| 18 | 收集固件 | <1 min | 拷到 `output/` |
-| 19 | 上传固件 artifact | 1–2 min | 165–200 MB（零区压缩率高，rootfs 变大后变化不大） |
-| 20 | 发布到 Release（自动） | 1–2 min | tag `g68-plus-YYYY.MM.DD`，上传 `*.img.gz` + `sha256sums` |
+| 6–7 | 生成 feeds.conf / 安装官方 4 源 | 3–8 min | packages/luci/routing/telephony 全量 |
+| 8 | 引入第三方 feed 并选择性安装 | 2–3 min | `kenzok8/small-package` 只按名装需要的包 |
+| 9 | 引入 `luci-app-filetransfer`（本地包） | <1 min | 第三方单包，直连 clone |
+| 10 | 应用 defconfig + 附加配置 | <1 min | 追加 + `make defconfig` + **强制关闭 pass** |
+| 11 | 校验宿主机依赖（`make prereq`） | 1–2 min | 提前暴露 pyelftools 类问题 |
+| 12 | 校验附加包是否生效 | <1 min | Job Summary 表格 ✅ / ⚠️ / ⛔ |
+| 13 | 缓存 dl 与 ccache | <1 min | 命中缓存显著提速 |
+| 14 | 下载软件包源码 | 1–13 min | `make download`，命中缓存时很快 |
+| 15 | 构建工具链（tools + toolchain） | 22–35 min | 产出 `aarch64-openwrt-linux-musl-gcc` |
+| 16 | 修复 rust vendor 校验并预编译 rust host | **80–120 min**（保留 ss-rust 时） | 关掉 ss-rust 则整步跳过 |
+| 17 | 编译固件（`make world` 剩余部分） | 45–75 min | 内核 + u-boot/ATF + 550+ 包 + 镜像 |
+| 18 | 记录 rootfs 占用 | <1 min | 打印 squashfs 实际大小，≥85% 告警 |
+| 19 | 校验镜像分区表 | <1 min | 断言 MBR 为 `16 / 200 / 4096`，不符直接失败 |
+| 20 | 收集固件 | <1 min | 拷到 `output/` |
+| 21 | 上传固件 artifact | 1–2 min | 约 165–200 MB |
+| 22 | 发布到 Release | 1–2 min | tag `g68-plus-YYYY.MM.DD`，含 `.img.gz` + `sha256sums` |
+| 23 | 构建失败时自动开 issue | 0 | 仅失败时执行，见 3.1 |
+| 24 | 上传编译日志 | 0 | 仅失败时执行（`build.log` 等 4 个） |
 
-**总时长参考**：当前配置（无 ss-rust）**≈ 2 小时 20 分 – 2 小时 40 分**；
-若把 ss-rust 加回来，会多出 rustc + LLVM 的 110–120 分钟。
-
----
+**总时长参考**：保留 ss-rust（当前基线）**≈ 3.5–4 小时**；关掉 ss-rust 可降到 **≈ 2.5 小时**。
 
 ## 3. 怎么看进度 / 怎么判断成功
 
@@ -208,6 +210,8 @@ sync
 | 第 17 步超过 350 分钟被杀 | 超出 `timeout-minutes` | 把 `timeout-minutes` 提到 360（GitHub 上限），或关闭 ss-rust 缩短时间 |
 | Release 步骤失败但构建成功 | `publish_release` 权限/网络问题 | 用 `Publish firmware to Release` workflow 手动补发（见 7.3） |
 | 步骤显示 skipped | `if` 条件不满足（如 `publish_release=false`、或前序失败） | 检查输入参数与前序步骤 |
+| 手动 `mkfs`/`mount` 报 `No such device` / `Can't open blockdev` | 在线改分区表后内核还没生成分区节点 | 重启一次（新固件的 `docker-disk` 会自动重启一次并续跑） |
+| iStore「快速安装」里存储位置为空 | 没有任何可用数据分区（只有系统分区） | 先完成拆盘（新固件首启自动做），或手动建 p5/p6 并挂载 |
 
 ---
 
@@ -288,7 +292,7 @@ tag      : g68-plus-2026.11.06      # 目标 tag；已存在则直接追加资�
 该镜像含 `shadowsocks-rust`；下一版已关闭它，squashfs 会再小 5–10 MiB（约 150 MiB，占用 ~75%）。
 **docker / iStore 的可用空间由 `rootfs_data_size` 决定**（现 4096 MiB），与 `rootfs_size` 无关。
 
-### 7.5 给 docker / iStore 扩容（rootfs_data 只有 2048 MiB）
+### 7.5 给 docker / iStore 扩容（rootfs_data 默认 4096 MiB）
 
 扩容 docker / iStore 要调的是 **`rootfs_data_size`**（现 4096 MiB）。另外三种免重编做法：
 
@@ -322,9 +326,9 @@ uci commit dockerd && /etc/init.d/dockerd restart
 
 判断条件：只要 `data_root` 不是 `/opt/docker`，且不等于标记文件里记录的「脚本上次设的值」，就视为手工设置。
 
-### 7.8 首次启动自动拆分剩余空间（256G eMMC 场景）
+### 7.7 首次启动自动拆分剩余空间（256G eMMC 场景）
 
-镜像只占约 **4.6 GiB**（kernel 16 + rootfs 512 + rootfs_data 4096 MiB），256 GB 的 eMMC 有约 250 GB 未分配。
+镜像只占约 **4.3 GiB**（kernel 16 + rootfs 200 + rootfs_data 4096 MiB），256 GB 的 eMMC 有约 250 GB 未分配。
 固件内置 `/etc/init.d/docker-disk`（START=58），**首次启动**时把剩余空间拆成两块：
 
 | 分区 | 大小 | 文件系统 / 卷标 | 挂载点 | 用途 |
@@ -351,7 +355,7 @@ uci commit dockerd && /etc/init.d/dockerd restart
 | 失败兜底 | 任一步失败打日志并保留默认 `/opt/docker`，不阻塞开机 |
 | 只跑一次 | 成功后写 `/etc/.docker-disk.done` |
 | 小盘保护 | 剩余 < 58 GiB 直接跳过 |
-| 在线改表 | 新增分区内核不立刻识别，脚本用 `mknod` 造 `/dev/mmcblk0p5|p6`（minor 5/6）先挂上；重启后正常识别，之后走 fstab+UUID |
+| 在线改表 | 新增分区后内核若不生成 `p0n` 节点，脚本**自动重启一次**（`/etc/.docker-disk.rebooted` 防循环），下次开机走「复用已有 p5/p6」分支继续格式化/挂载 |
 
 开关与排错：
 
@@ -364,7 +368,11 @@ cat /etc/.docker-disk.log ; logread | grep docker-disk           # 日志
 想改 docker 分区容量：改脚本里的 `DOCKER_MIB`（默认 **51200 = 50 GiB**；阈值会自动跟着变 = DOCKER_MIB + 8 GiB），
 或改 `DOCKER_LABEL` / `DATA_LABEL` / 挂载点。
 
-### 7.10 内置 opkg 软件源（官方 + iStoreOS，刷完即用）
+**对 iStore 商店的意义**：商店的「快速安装」向导必须从 `/admin/store/get_block_devices`
+（内部执行 `block info`）里选一个**存储位置**。拆盘成功前系统只有 p1/p2/p3 三个系统分区，
+列表为空 → 安装按钮点不动。拆盘并挂载后就会出现 `/mnt/ext_relay` 与 `/mnt/data`，选后者即可安装。
+
+### 7.8 内置 opkg 软件源（官方 + iStoreOS，刷完即用）
 
 镜像内置 `files/etc/opkg/distfeeds.conf`，刷完开机即生效，**不用再手动粘贴地址**。分两组：
 
@@ -403,13 +411,13 @@ src/gz immortalwrt_telephony  .../releases/24.10.0/packages/aarch64_generic/tele
 **换镜像**：直接编辑 `/etc/opkg/distfeeds.conf` 的 URL，然后 `opkg update`。
 不要在快照固件上跑全量 `opkg upgrade`（快照包与 24.10.0 发布版不完全一致），只装需要的新包。
 
-### 7.11 NVMe 硬盘自动检测与挂载
+### 7.9 NVMe 硬盘自动检测与挂载
 
 固件内置 `/etc/init.d/nvme-automount`（START=62，每次开机执行、幂等），自动处理 `/dev/nvme*n1`：
 
 | 情况 | 行为 |
 | --- | --- |
-| 已有分区 + 受支持文件系统（ext4 / xfs / btrfs / f2fs / exfat） | 挂到 `/mnt/nvme0`（多分区依次 `/mnt/nvme0_pN`），按 **UUID** 写入 fstab，后续开机由 block-mount 自动挂载 |
+| 已有分区 + 受支持文件系统（ext4 / xfs / btrfs / f2fs / exfat / **ntfs3**） | 挂到 `/mnt/nvme0`（多分区依次 `/mnt/nvme0_pN`），按 **UUID** 写入 fstab，后续开机由 block-mount 自动挂载 |
 | 磁盘完全空白（无分区表、无文件系统签名）且 ≥ 8 GiB | 自动建 **GPT + 单分区 + ext4**（卷标 `NVME0`）后挂载 |
 | 有分区但文件系统不受支持（如 NTFS） | **只记日志，不格式化、不挂载**（保护数据） |
 | 小于 8 GiB 的空白盘 | 跳过格式化 |
@@ -432,7 +440,7 @@ uci commit dockerd && /etc/init.d/dockerd restart
 
 （也可以在镜像里把 `nvme-automount` 的 `START` 调到 56，让 `docker-dataroot` 自动优先选 NVMe。）
 
-### 7.12 修掉 TTYD 终端「已拒绝连接」（改 LAN IP 后必现）
+### 7.10 修掉 TTYD 终端「已拒绝连接」（改 LAN IP 后必现）
 
 **症状**：改过 LAN 管理地址（或换网段）后，LuCI 里的 TTYD 终端打不开，浏览器报「已拒绝连接 / ERR_CONNECTION_REFUSED」。
 
@@ -459,7 +467,7 @@ netstat -lntp | grep 7681        # 应看到 0.0.0.0:7681（而不是旧的 LAN 
 **安全提醒**：监听 `0.0.0.0` 只代表「不受网卡 IP 变化影响」，WAN 侧仍由防火墙默认策略拦截（没有放行 7681 的规则）；
 不要把 7681 加到 WAN 区域，也不要用 root 空密码。
 
-### 7.13 指示灯（电源灯）开关
+### 7.11 指示灯（电源灯）开关
 
 查过 `rk3568-nsy-g68-plus.dts` 与内核驱动后确认这台机器的灯分两类：
 
@@ -491,7 +499,7 @@ uci commit portled && /etc/init.d/portled restart
 
 日志：`/etc/portled.log`、`logread | grep portled`。
 
-### 7.9 回滚 / 删除发布### 7.9 回滚 / 删除发布
+### 7.12 回滚 / 删除发布
 
 ```bash
 gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cleanup-tag
@@ -537,14 +545,14 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
 - [ ] 构建结束后：看 Job Summary 的包表格 → 下载 artifact 或 Release → 校验 sha256 → 刷机
 
 
-## 附录 A. 当前冻结基线
+## 附录 A. 当前冻结基线（配置已冻结；产物以最新 Release 为准）
 
 2026-11-07 起，`defconfig/g68-plus-istoreos.config` + 本 workflow 作为**最终基线**：定时构建与手动构建都用它，
 不再有临时改动/一次性 cron。基线产物：
 
 | 项目 | 值 |
 | --- | --- |
-| 构建 | run #42337188896（2026-11-07，549 个包，24 步全绿） |
+| 构建（上一版） | run #42337188896（2026-11-07，549 个包，24 步全绿） |
 | Release | `g68-plus-2026.11.07-r12` |
 | 镜像 sha256 | `0ecc1541a381669861c45f8a505d077e97a986697064a4ab5d8fddfc8d3a9e96` |
 | 分区 | kernel 16 MiB / rootfs 200 MiB / rootfs_data 4096 MiB |
@@ -569,6 +577,8 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
 | 首次启动即生效 | `98-enable-custom-initd` 在后台立即执行一次（sleep 5） | ✅ 无需重启 |
 | NVMe 支持 | 内核模块 | ✅ kmod-nvme / kmod-fs-ext4 / exfat / vfat / btrfs 已在；**本次补上 kmod-fs-f2fs、kmod-fs-xfs、kmod-fs-ntfs3** |
 | 分区脚本幂等 | 假 sysfs 冒烟测试 | ✅ 已有 p5/p6 且已格式化 → 只挂载不重格；中途失败不写完成标记，下次自动重试 |
-| fstab 安全 | 按 UUID 去重 | ✅ 不再删已有条目 |
+| fstab 安全 | 两个脚本都按 UUID 去重 | ✅ 不再追加重复项、也不再删已有条目 |
+| 在线改表兼容 | 分区后内核未识别 → 自动重启一次（防循环标记） | ✅ 假 sysfs 4 场景验证（建盘→重启→格式化→幂等） |
+| 商店可用性 | 拆盘后出现 `/mnt/ext_relay`、`/mnt/data` 供选择 | ✅ 依赖拆盘成功 |
 | ttyd | 不绑定 `@lan` | ✅ 改 LAN IP 后不会「已拒绝连接」 |
 | opkg 源 | 9 个源（官方 6 + iStoreOS 3） | ✅ 首次启动自动补 arch、必要时关签名校验 |
