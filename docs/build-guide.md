@@ -440,8 +440,9 @@ src/gz immortalwrt_telephony  .../releases/24.10.0/packages/aarch64_generic/tele
 快捷开关（在 `/etc` 下建文件即可，开机读取）：
 
 ```sh
-touch /etc/nvme-automount.off       # 完全关闭
-touch /etc/nvme-automount.noformat  # 只挂载已有文件系统, 绝不分区/格式化(推荐给带数据的盘)
+touch /etc/nvme-automount.off       # 完全关闭（不检测、不挂载）
+touch /etc/nvme-automount.format    # 【非默认】允许对空白盘自动建 GPT+ext4（会丢盘内数据，慎用）
+# 默认行为 = 只挂载已有文件系统；空白/未知文件系统只记日志，绝不格式化
 ```
 
 **与 docker 的关系**：当前 docker 数据目录固定走 eMMC 的 `/mnt/ext_relay/docker`（50 GiB，`docker-disk` 在 START=58 已设好，
