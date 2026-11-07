@@ -13,7 +13,7 @@
 | 文件 | sha256 |
 | --- | --- |
 | `defconfig/g68-plus-istoreos.config` | `908855b1d006c80b759e9645068539e8ce265017c02d65cd008310201bc01b4e` |
-| `.github/workflows/build-g68-plus-docker.yml` | `9af51b453d22c532ea7e5f1e3d920d0113ed6fe0526d23bfd57b226633798897` |
+| `.github/workflows/build-g68-plus-docker.yml` | `3d05e23ff9df443c8accb581cbd46881814792228a4b49445769327f15568a85` |
 | `scripts/gen_image_generic.sh` | `f6d59494a9c88f5fe4e2175f00067eb5b5160a32b903b0a16f726a7b99903e98` |
 | 固件镜像 `*.img.gz` | `0ecc1541a381669861c45f8a505d077e97a986697064a4ab5d8fddfc8d3a9e96` |
 

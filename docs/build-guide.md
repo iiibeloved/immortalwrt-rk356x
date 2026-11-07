@@ -591,3 +591,34 @@ CI 也会在「校验配置并打印目标」步骤里做一次**软校验**：�
 | 商店可用性 | 拆盘后出现 `/mnt/ext_relay`、`/mnt/data` 供选择 | ✅ 依赖拆盘成功 |
 | ttyd | 不绑定 `@lan` | ✅ 改 LAN IP 后不会「已拒绝连接」 |
 | opkg 源 | 9 个源（官方 6 + iStoreOS 3） | ✅ 首次启动自动补 arch、必要时关签名校验 |
+
+
+## 附录 C. 下载加速（GitHub 代理直链）
+
+Release 资产在 GitHub 上直连慢时，可在链接前加代理前缀（文件内容与 sha256 完全不变）：
+
+```
+https://gh-proxy.com/https://github.com/<owner>/<repo>/releases/download/<tag>/<file>
+https://ghfast.top/https://github.com/<owner>/<repo>/releases/download/<tag>/<file>
+https://ghproxy.net/https://github.com/<owner>/<repo>/releases/download/<tag>/<file>
+```
+
+本仓库的实际链接（把 `<tag>` 换成具体版本，如 `g68-plus-2026.11.08`）：
+
+| 方式 | 链接 |
+| --- | --- |
+| GitHub 直链 | `https://github.com/iiibeloved/immortalwrt-rk356x/releases/download/<tag>/immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz` |
+| 加速 1 | `https://gh-proxy.com/https://github.com/iiibeloved/immortalwrt-rk356x/releases/download/<tag>/immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz` |
+| 加速 2 | `https://ghfast.top/https://github.com/iiibeloved/immortalwrt-rk356x/releases/download/<tag>/immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz` |
+| 加速 3 | `https://ghproxy.net/https://github.com/iiibeloved/immortalwrt-rk356x/releases/download/<tag>/immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz` |
+
+`sha256sums` 同样可加前缀：
+
+```
+https://gh-proxy.com/https://github.com/iiibeloved/immortalwrt-rk356x/releases/download/<tag>/sha256sums
+```
+
+> 2026-11-07 实测三个代理对该仓库的 Release 资产均返回 `206`（支持断点续传）；
+> `github.moeyy.xyz`、`hub.gitmirror.com`、`ghproxy.cc` 当时不可用。
+>
+> 每次构建的 Release 说明页也会自动列出这三条加速链接（workflow 的「发布到 Release」步骤生成）。
