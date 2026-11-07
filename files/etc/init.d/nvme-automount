@@ -81,7 +81,10 @@ make_blank() {      # $1=磁盘装置  $2=序号
 		return 0
 	fi
 	parted -s "$disk" mklabel gpt >>"$LOG" 2>&1 || { log "mklabel 失败"; return 1; }
-	parted -s "$disk" mkpart primary ext4 0% 100% >>"$LOG" 2>&1 || { log "mkpart 失败"; return 1; }
+	parted -s "$disk" unit MiB mkpart primary ext4 1 100% >>"$LOG" 2>&1 \
+		|| parted -a none -s "$disk" unit MiB mkpart primary 1 100% >>"$LOG" 2>&1 \
+		|| parted -a none -s "$disk" mkpart primary 1MiB 100% >>"$LOG" 2>&1 \
+		|| { log "mkpart 失败(已尝试 3 种写法)"; return 1; }
 	part="${disk}p1"
 	name=$(basename "$disk")
 

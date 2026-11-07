@@ -24,6 +24,7 @@ START=58           # 早于 docker-dataroot(60) 与 dockerd(99)
 STOP=10
 
 : "${MARKER:=/etc/.docker-disk.done}"
+: "${DEVDIR:=/dev}"            # 设备节点根目录(便于测试)
 : "${LOG:=/etc/.docker-disk.log}"
 : "${BLOCKDIR:=/sys/class/block}"
 : "${MOUNTS:=/proc/mounts}"
@@ -62,6 +63,75 @@ boot_disk() {
 		[ -n "$pk" ] && { echo "$pk"; return 0; }
 	fi
 	return 1
+}
+
+# 建分区: parted 在不同版本对 `mkpart extended/logical` 的解析不一致, 这里按变体依次尝试,
+# 并用 `parted -m print` 校验分区是否真的创建成功、大小是否符合预期。
+parted_try() {   # $1=dev  $2..=参数变体字符串(按顺序尝试)
+	local dev="$1"; shift
+	local args rc
+	for args in "$@"; do
+		# shellcheck disable=SC2086
+		parted -s "$dev" $args >>"$LOG" 2>&1
+		rc=$?
+		[ "$rc" = "0" ] && { log "parted ok: parted -s $dev $args"; return 0; }
+		log "parted 失败(rc=$rc): parted -s $dev $args"
+	done
+	return 1
+}
+
+part_count() {   # 输出 parted -m print 里的最大分区号
+	parted -m -s "$1" unit MiB print 2>/dev/null | awk -F: '/^[0-9]+:/{if ($1+0 > m) m=$1+0} END{print m+0}'
+}
+
+part_size_mib() {   # $1=dev $2=分区号 -> 大小(MiB, 取整)
+	parted -m -s "$1" unit MiB print 2>/dev/null | awk -F: -v n="$2" '$1+0==n {gsub(/MiB$/,"",$4); printf "%d\n", $4+0}'
+}
+
+create_parts() {   # $1=dev  $2=extended 起始 MiB
+	local dev="$1" base="$2"
+	local p5s=$((base + 1))
+	local p5e=$((p5s + DOCKER_MIB - 1))
+	local p6s=$((p5e + 1))
+	local n sz
+
+	log "创建分区: extended=$base  p5=$p5s..$p5e  p6=$p6s..end (MiB)"
+
+	# 扩展分区(已存在则跳过)
+	if [ "$(part_count "$dev")" -ge 4 ]; then
+		log "$dev 已有分区 4(扩展), 跳过 extended 创建"
+	else
+		parted_try "$dev" \
+			"unit MiB mkpart extended $base 100%" \
+			"unit MiB mkpart primary $base 100%" \
+			|| { log "创建扩展分区失败, 放弃"; return 1; }
+	fi
+
+	# p5(50 GiB docker)
+	if [ ! -e "$BLOCKDIR/${DISK}p5" ]; then
+		parted_try "$dev" \
+			"unit MiB mkpart logical ext4 $p5s $p5e" \
+			"unit MiB mkpart logical $p5s $p5e" \
+			"-a none unit MiB mkpart logical ext4 $p5s $p5e" \
+			|| { log "创建 p5 失败, 放弃"; return 1; }
+	fi
+	# p6(其余)
+	if [ ! -e "$BLOCKDIR/${DISK}p6" ]; then
+		parted_try "$dev" \
+			"unit MiB mkpart logical ext4 $p6s 100%" \
+			"unit MiB mkpart logical $p6s 100%" \
+			"-a none unit MiB mkpart logical ext4 $p6s 100%" \
+			|| { log "创建 p6 失败, 放弃"; return 1; }
+	fi
+
+	# 校验: 必须有 5/6 号分区, 且 p5 大小≈DOCKER_MIB
+	n=$(part_count "$dev"); sz=$(part_size_mib "$dev" 5)
+	log "校验: 最大分区号=$n, p5 大小=${sz}MiB (期望 ${DOCKER_MIB}MiB)"
+	[ "${n:-0}" -ge 6 ] || { log "分区数不足(需要 6), 放弃"; return 1; }
+	if [ "${sz:-0}" -gt 0 ] && [ "$sz" -lt $((DOCKER_MIB * 90 / 100)) ]; then
+		log "p5 大小异常(${sz}MiB), 放弃自动处理"; return 1
+	fi
+	return 0
 }
 
 disk_size_bytes() { echo $(( $(cat "$BLOCKDIR/$1/size") * 512 )); }
@@ -200,30 +270,11 @@ start() {
 
 	start_mib=$(( (end + 1048575) / 1048576 + 1 ))     # 向上取整到 MiB +1 对齐
 
-	# 部分完成状态兼容: 扩展分区(p4)可能已存在, 或 p5/p6 只缺一个
-	local ext_exists=0 p5_exists=0 p6_exists=0
-	[ -e "$BLOCKDIR/$DISK/${DISK}p4" ] && ext_exists=1
-	[ -e "$BLOCKDIR/$DISK/${DISK}p5" ] && p5_exists=1
-	[ -e "$BLOCKDIR/$DISK/${DISK}p6" ] && p6_exists=1
-	[ "$ext_exists" = "1" ] && log "$DISK 已有扩展分区 p4, 跳过创建扩展分区"
-
+	# 部分完成状态兼容: 扩展分区(p4)可能已存在, 或 p5/p6 只缺一个(create_parts 内部自行判断)
 	if [ "$DRYRUN" = "1" ]; then
-		[ "$ext_exists" = "1" ] || log "[dryrun] parted -s /dev/$DISK unit MiB mkpart extended ${start_mib} 100%"
-		[ "$p5_exists" = "1" ] || log "[dryrun] parted -s /dev/$DISK unit MiB mkpart logical ext4 ${start_mib} $((start_mib + DOCKER_MIB - 1))MiB"
-		[ "$p6_exists" = "1" ] || log "[dryrun] parted -s /dev/$DISK unit MiB mkpart logical ext4 $((start_mib + DOCKER_MIB)) 100%"
+		log "[dryrun] create_parts $DEVDIR/$DISK $start_mib  (extended + logical ${start_mib}..100%)"
 	else
-		if [ "$ext_exists" = "0" ]; then
-			parted -s "/dev/$DISK" unit MiB mkpart extended "${start_mib}MiB" 100% >>"$LOG" 2>&1 \
-				|| { log "创建扩展分区失败, 放弃"; return 0; }
-		fi
-		if [ "$p5_exists" = "0" ]; then
-			parted -s "/dev/$DISK" unit MiB mkpart logical ext4 "${start_mib}MiB" "$((start_mib + DOCKER_MIB - 1))MiB" >>"$LOG" 2>&1 \
-				|| { log "创建 docker 逻辑分区失败, 放弃"; return 0; }
-		fi
-		if [ "$p6_exists" = "0" ]; then
-			parted -s "/dev/$DISK" unit MiB mkpart logical ext4 "$((start_mib + DOCKER_MIB))MiB" 100% >>"$LOG" 2>&1 \
-				|| { log "创建 Data 逻辑分区失败, 放弃"; return 0; }
-		fi
+		create_parts "$DEVDIR/$DISK" "$start_mib" || { log "分区创建失败, 放弃"; return 0; }
 	fi
 
 	# 在线改分区表后内核通常不会立刻生成新分区节点(mknod 出来的节点无法 mkfs/mount),
