@@ -24,6 +24,8 @@ STOP=10
 : "${MOUNTS:=/proc/mounts}"
 : "${LOG:=/etc/nvme-automount.log}"
 : "${MNTPREFIX:=/mnt}"   # 挂载点前缀(便于测试)
+: "${NVME_CLASS:=/sys/class/nvme}"
+: "${PENDDIR:=/etc}"   # NVMe 控制器 class 目录(便于测试覆盖)
 DRYRUN="${NVME_DRYRUN:-0}"
 OFF=/etc/nvme-automount.off
 NOFMT=/etc/nvme-automount.noformat
@@ -81,8 +83,19 @@ make_blank() {      # $1=磁盘装置  $2=序号
 	parted -s "$disk" mklabel gpt >>"$LOG" 2>&1 || { log "mklabel 失败"; return 1; }
 	parted -s "$disk" mkpart primary ext4 0% 100% >>"$LOG" 2>&1 || { log "mkpart 失败"; return 1; }
 	part="${disk}p1"
-	# 内核可能还没生成节点
-	[ -b "$part" ] || { mknod "$part" b "$(cut -d: -f1 "$BLOCKDIR/$(basename "$disk")/dev")" 1 2>>"$LOG"; }
+	name=$(basename "$disk")
+
+	# 新盘未被占用, 可让内核重新读取分区表(BLKRRPART)
+	blockdev --rereadpt "$disk" 2>/dev/null || true
+	sleep 1
+
+	if [ ! -e "$BLOCKDIR/${name}p1" ]; then
+		log "$disk 新分区暂未被内核识别, 标记待格式化, 下次开机继续"
+		touch "$PENDDIR/nvme-pending.$name" 2>/dev/null || true
+		return 1
+	fi
+
+	[ -b "$part" ] || mknod "$part" b "$(cut -d: -f1 "$BLOCKDIR/$name/dev")" 1 2>>"$LOG" || true
 	mkfs.ext4 -F -m 0 -L "NVME$idx" "$part" >>"$LOG" 2>&1 || { log "mkfs 失败"; return 1; }
 	return 0
 }
@@ -91,12 +104,17 @@ start() {
 	[ -f "$OFF" ] && { log "已关闭(/etc/nvme-automount.off), 跳过"; return 0; }
 
 	local d n=0 disk parts p idx mp
-	# 等 NVMe 枚举(最多 20 秒)
+	# 没有 NVMe 控制器(硬件不存在)时立即返回, 避免每次开机白等
+	if [ ! -e "$NVME_CLASS" ] && [ ! -e "$BLOCKDIR/nvme0n1" ]; then
+		log "未检测到 NVMe 控制器, 跳过"
+		return 0
+	fi
+	# 有控制器时等命名空间节点出现(最多 10 秒)
 	i=0
-	while [ "$i" -lt 4 ]; do
+	while [ "$i" -lt 5 ]; do
 		set -- "$BLOCKDIR"/nvme*n1
 		[ -e "$1" ] && break
-		sleep 5
+		sleep 2
 		i=$((i + 1))
 	done
 
@@ -107,7 +125,29 @@ start() {
 		mp="$MNTPREFIX/nvme$idx"
 		log "发现 NVMe 磁盘: $disk"
 
-		parts=$(ls "$d" 2>/dev/null | grep -E '^'"$(basename "$d")"'p[0-9]+$' | tr '\n' ' ')
+		name=$(basename "$d")
+		pend="$PENDDIR/nvme-pending.$name"
+		if [ -f "$pend" ] && [ -e "$d/${name}p1" ]; then
+			log "$disk 上次建好分区但未格式化, 现在补做"
+			if [ "$DRYRUN" = "1" ]; then
+				log "[dryrun] mkfs.ext4 -L NVME$idx ${disk}p1 ; mount ${disk}p1 $MP_NVME_FLAG"
+			else
+				[ -b "${disk}p1" ] || mknod "${disk}p1" b "$(cut -d: -f1 "$d/dev")" 1 2>>"$LOG" || true
+				if mkfs.ext4 -F -m 0 -L "NVME$idx" "${disk}p1" >>"$LOG" 2>&1; then
+					rm -f "$pend"
+					log "补格式化完成"
+					# 刚格式化完 blkid 可能还没刷新, 直接用 ext4 挂载并写 fstab
+					mkdir -p "$MNTPREFIX/nvme$idx"
+					mountpoint -q "$MNTPREFIX/nvme$idx" || mount -t ext4 "${disk}p1" "$MNTPREFIX/nvme$idx" 2>>"$LOG"
+					persist_fstab "$(uuid_of "${disk}p1")" "$MNTPREFIX/nvme$idx" ext4
+					log "已挂载 ${disk}p1 (ext4) -> $MNTPREFIX/nvme$idx"
+				else
+					log "补格式化失败"
+				fi
+			fi
+		fi
+
+		parts=$(ls "$d" 2>/dev/null | grep -E '^'"$name"'p[0-9]+$' | tr '\n' ' ')
 		if [ -z "$parts" ]; then
 			if [ -f "$NOFMT" ]; then
 				log "$disk 无分区, 且存在 noformat 开关, 跳过"
@@ -127,6 +167,7 @@ start() {
 			first=0
 		done
 	done
+	[ "$n" -gt 0 ] || log "未发现可用 NVMe 磁盘"
 }
 
 stop() { :; }

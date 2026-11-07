@@ -174,6 +174,7 @@ start() {
 		dev=$(label_of "$DATA_LABEL"); [ "$DRYRUN" = "1" ] || mkdir -p "$DATA_MP"
 		[ "$DRYRUN" = "1" ] || { mountpoint -q "$DATA_MP" || mount -t ext4 "$dev" "$DATA_MP"; }
 		set_docker_root
+		[ "$DRYRUN" = "1" ] || touch "$MARKER"
 		return 0
 	fi
 
@@ -199,17 +200,30 @@ start() {
 
 	start_mib=$(( (end + 1048575) / 1048576 + 1 ))     # 向上取整到 MiB +1 对齐
 
+	# 部分完成状态兼容: 扩展分区(p4)可能已存在, 或 p5/p6 只缺一个
+	local ext_exists=0 p5_exists=0 p6_exists=0
+	[ -e "$BLOCKDIR/$DISK/${DISK}p4" ] && ext_exists=1
+	[ -e "$BLOCKDIR/$DISK/${DISK}p5" ] && p5_exists=1
+	[ -e "$BLOCKDIR/$DISK/${DISK}p6" ] && p6_exists=1
+	[ "$ext_exists" = "1" ] && log "$DISK 已有扩展分区 p4, 跳过创建扩展分区"
+
 	if [ "$DRYRUN" = "1" ]; then
-		log "[dryrun] parted -s /dev/$DISK unit MiB mkpart extended ${start_mib} 100%"
-		log "[dryrun] parted -s /dev/$DISK unit MiB mkpart logical ext4 ${start_mib} $((start_mib + DOCKER_MIB - 1))MiB"
-		log "[dryrun] parted -s /dev/$DISK unit MiB mkpart logical ext4 $((start_mib + DOCKER_MIB)) 100%"
+		[ "$ext_exists" = "1" ] || log "[dryrun] parted -s /dev/$DISK unit MiB mkpart extended ${start_mib} 100%"
+		[ "$p5_exists" = "1" ] || log "[dryrun] parted -s /dev/$DISK unit MiB mkpart logical ext4 ${start_mib} $((start_mib + DOCKER_MIB - 1))MiB"
+		[ "$p6_exists" = "1" ] || log "[dryrun] parted -s /dev/$DISK unit MiB mkpart logical ext4 $((start_mib + DOCKER_MIB)) 100%"
 	else
-		parted -s "/dev/$DISK" unit MiB mkpart extended "${start_mib}MiB" 100% >>"$LOG" 2>&1 \
-			|| { log "创建扩展分区失败, 放弃"; return 0; }
-		parted -s "/dev/$DISK" unit MiB mkpart logical ext4 "${start_mib}MiB" "$((start_mib + DOCKER_MIB - 1))MiB" >>"$LOG" 2>&1 \
-			|| { log "创建 docker 逻辑分区失败, 放弃"; return 0; }
-		parted -s "/dev/$DISK" unit MiB mkpart logical ext4 "$((start_mib + DOCKER_MIB))MiB" 100% >>"$LOG" 2>&1 \
-			|| { log "创建 Data 逻辑分区失败, 放弃"; return 0; }
+		if [ "$ext_exists" = "0" ]; then
+			parted -s "/dev/$DISK" unit MiB mkpart extended "${start_mib}MiB" 100% >>"$LOG" 2>&1 \
+				|| { log "创建扩展分区失败, 放弃"; return 0; }
+		fi
+		if [ "$p5_exists" = "0" ]; then
+			parted -s "/dev/$DISK" unit MiB mkpart logical ext4 "${start_mib}MiB" "$((start_mib + DOCKER_MIB - 1))MiB" >>"$LOG" 2>&1 \
+				|| { log "创建 docker 逻辑分区失败, 放弃"; return 0; }
+		fi
+		if [ "$p6_exists" = "0" ]; then
+			parted -s "/dev/$DISK" unit MiB mkpart logical ext4 "$((start_mib + DOCKER_MIB))MiB" 100% >>"$LOG" 2>&1 \
+				|| { log "创建 Data 逻辑分区失败, 放弃"; return 0; }
+		fi
 	fi
 
 	# 在线改分区表后内核通常不会立刻生成新分区节点(mknod 出来的节点无法 mkfs/mount),
