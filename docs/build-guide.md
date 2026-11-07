@@ -380,7 +380,7 @@ cat /etc/.docker-disk.log ; logread | grep docker-disk           # 日志
 | 部分完成状态死循环 | p4 已建但 p5/p6 缺一个 → 旧版会再执行 `mkpart extended` 并永久失败 | 检测 p4/p5/p6 各自是否存在，**只补缺的那块** |
 | 「已存在 LABEL」分支不写完成标记 | 每次开机重复挂载并刷日志 | 该分支也写 `/etc/.docker-disk.done` |
 | 无 NVMe 时开机白等 20 秒 | 没有 NVMe 硬件的机器 | 先看 `NVME_CLASS`(/sys/class/nvme)，无控制器立即返回并记日志 |
-| 全新空白 NVMe 无法格式化 | `parted` 建完 p1 内核未识别 → `mkfs` 报 `No such device`，且下次开机因「无文件系统」被跳过 | 建表后 `blockdev --rereadpt` + 重试；仍不可见则写 `/etc/nvme-pending.<disk>`，**下次开机补格式化并直接挂载** |
+| 策略调整：NVMe 只挂载不格式化 | 旧版会对空白盘自动建 GPT+ext4（有误格式化风险） | **默认改为只挂载、保留盘内数据**；需要格式化必须显式开启标记 |
 
 **对 iStore 商店的意义**：商店的「快速安装」向导必须从 `/admin/store/get_block_devices`
 （内部执行 `block info`）里选一个**存储位置**。拆盘成功前系统只有 p1/p2/p3 三个系统分区，
@@ -432,9 +432,9 @@ src/gz immortalwrt_telephony  .../releases/24.10.0/packages/aarch64_generic/tele
 | 情况 | 行为 |
 | --- | --- |
 | 已有分区 + 受支持文件系统（ext4 / xfs / btrfs / f2fs / exfat / **ntfs3**） | 挂到 `/mnt/nvme0`（多分区依次 `/mnt/nvme0_pN`），按 **UUID** 写入 fstab，后续开机由 block-mount 自动挂载 |
-| 磁盘完全空白（无分区表、无文件系统签名）且 ≥ 8 GiB | 自动建 **GPT + 单分区 + ext4**（卷标 `NVME0`）后挂载；若内核未即时识别分区，会写 `/etc/nvme-pending.<disk>` 并在**下次开机**补格式化后直接挂载 |
+| 磁盘完全空白（无分区表） | **默认不格式化、直接跳过**（保护盘内数据，只写日志）；确需自动建 GPT+ext4 时显式开启：`touch /etc/nvme-automount.format` 后重启（或临时 `NVME_FORMAT=1`） |
 | 有分区但文件系统不受支持（如 NTFS） | **只记日志，不格式化、不挂载**（保护数据） |
-| 小于 8 GiB 的空白盘 | 跳过格式化 |
+| 小于 8 GiB 的空白盘 | 即使开启格式化也跳过 |
 
 日志：`/etc/nvme-automount.log`、`logread | grep nvme-automount`。
 快捷开关（在 `/etc` 下建文件即可，开机读取）：

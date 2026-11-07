@@ -53,7 +53,7 @@
 | 拆分剩余空间：`ext_relay` **50 GiB**（docker）+ `Data`（其余，共享/iStore） | `docker-disk` | 常驻 | `/etc/.docker-disk.done` + `flock` + 已有 p5/p6 复用 + 已有文件系统不重格 |
 | 分区表改动内核未识别 → **自动重启一次**续跑 | `docker-disk` | 常驻 | `/etc/.docker-disk.rebooted` 防循环 |
 | docker 数据目录 → `/mnt/ext_relay/docker` | `docker-disk` / `docker-dataroot` | 常驻 | 手动指定则尊重 |
-| NVMe 自动检测挂载 → `/mnt/nvme0` | `nvme-automount` | 常驻 | 已挂载跳过；fstab 按 UUID 去重 |
+| NVMe 自动检测挂载 → `/mnt/nvme0`（**只挂载、不格式化**，保留盘内数据） | `nvme-automount` | 常驻 | 已挂载跳过；fstab 按 UUID 去重；空白盘只记日志 |
 | TTYD 去掉 `@lan` 绑定（改 IP 不再「已拒绝连接」） | `98-fix-ttyd` + `files/etc/config/ttyd` | 一次性 | 无 `interface` 才改 |
 | 补 opkg arch、必要时关签名校验 | `99-opkg-istore` | 一次性 | 已有 arch 行则不重复 |
 | 指示灯（电源灯等 GPIO 灯）可关 | `portled` | 常驻 | 按 `/etc/config/portled` 应用 |
@@ -247,6 +247,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 | `mergerfs` | ImmortalWrt 24.10 与 small-package 均无此包，未集成（可用 diskman + 多挂载点替代） |
 | RJ45 网口灯 | 由 RTL8367S 交换芯片硬件驱动，`rtl8367b` 驱动未暴露 LED 属性，**软件无法开关**（`portled` 只控 GPIO 灯，如电源灯） |
 | 小盘设备 | eMMC 剩余 < 58 GiB 时不自动拆盘 → iStore「存储位置」为空，需手动建分区 |
+| NVMe 空白盘 | 默认**不**自动格式化（保护数据）；确需格式化请 `touch /etc/nvme-automount.format` 后重启 |
 | 首启一次重启 | 若内核未即时识别新分区，`docker-disk` 会自动重启一次再接续（最多一次，防循环） |
 | 时间同步 | RK3568 无电池 RTC，开机时间可能滞后；HTTPS 拉取失败时先 `date` 检查并等待 NTP |
 | 构建耗时 | 保留 ss-rust 时约 4 h 15 min；GitHub cron 偶有延迟/跳过，已用脚本核验兜底 |

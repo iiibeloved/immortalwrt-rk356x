@@ -6,13 +6,14 @@
 #    1) 枚举 /dev/nvme*n1 设备;
 #    2) 已有分区且文件系统受支持(ext4/xfs/btrfs/f2fs/exfat) -> 挂到 /mnt/nvmeX,
 #       以 UUID 写入 fstab, 之后由 block-mount 自动挂载;
-#    3) 磁盘完全空白(无分区表、无文件系统签名) -> 建 GPT + 单分区 + ext4
-#       (卷标 NVME<X>), 再挂到 /mnt/nvmeX;
+#    3) 磁盘完全空白(无分区表) -> **默认不格式化**, 只记录日志并跳过(保护盘内数据);
+#       确需自动建分区时, 手动 touch /etc/nvme-automount.format 再重启;
 #    4) 有分区但文件系统不支持(如 NTFS) -> 只记录日志, 不动数据、不格式化。
 #
 #  开关(建在 /etc 下即可, 开机脚本读取):
 #    /etc/nvme-automount.off       完全关闭本功能
-#    /etc/nvme-automount.noformat  只挂载, 绝不创建分区/格式化(推荐给有数据的盘)
+#    /etc/nvme-automount.noformat  兼容旧版(现在默认就是只挂载、不格式化)
+#    /etc/nvme-automount.format    显式开启"空白盘自动建 GPT+ext4"(默认关闭, 慎用)
 #
 #  日志: /etc/nvme-automount.log ; logread | grep nvme-automount
 # =============================================================================
@@ -93,8 +94,7 @@ make_blank() {      # $1=磁盘装置  $2=序号
 	sleep 1
 
 	if [ ! -e "$BLOCKDIR/${name}p1" ]; then
-		log "$disk 新分区暂未被内核识别, 标记待格式化, 下次开机继续"
-		touch "$PENDDIR/nvme-pending.$name" 2>/dev/null || true
+		log "$disk 新分区暂未被内核识别, 本次跳过(不反复重启)"
 		return 1
 	fi
 
@@ -129,35 +129,16 @@ start() {
 		log "发现 NVMe 磁盘: $disk"
 
 		name=$(basename "$d")
-		pend="$PENDDIR/nvme-pending.$name"
-		if [ -f "$pend" ] && [ -e "$d/${name}p1" ]; then
-			log "$disk 上次建好分区但未格式化, 现在补做"
-			if [ "$DRYRUN" = "1" ]; then
-				log "[dryrun] mkfs.ext4 -L NVME$idx ${disk}p1 ; mount ${disk}p1 $MP_NVME_FLAG"
-			else
-				[ -b "${disk}p1" ] || mknod "${disk}p1" b "$(cut -d: -f1 "$d/dev")" 1 2>>"$LOG" || true
-				if mkfs.ext4 -F -m 0 -L "NVME$idx" "${disk}p1" >>"$LOG" 2>&1; then
-					rm -f "$pend"
-					log "补格式化完成"
-					# 刚格式化完 blkid 可能还没刷新, 直接用 ext4 挂载并写 fstab
-					mkdir -p "$MNTPREFIX/nvme$idx"
-					mountpoint -q "$MNTPREFIX/nvme$idx" || mount -t ext4 "${disk}p1" "$MNTPREFIX/nvme$idx" 2>>"$LOG"
-					persist_fstab "$(uuid_of "${disk}p1")" "$MNTPREFIX/nvme$idx" ext4
-					log "已挂载 ${disk}p1 (ext4) -> $MNTPREFIX/nvme$idx"
-				else
-					log "补格式化失败"
-				fi
-			fi
-		fi
-
 		parts=$(ls "$d" 2>/dev/null | grep -E '^'"$name"'p[0-9]+$' | tr '\n' ' ')
 		if [ -z "$parts" ]; then
-			if [ -f "$NOFMT" ]; then
-				log "$disk 无分区, 且存在 noformat 开关, 跳过"
+			if [ -f /etc/nvme-automount.format ] || [ "${NVME_FORMAT:-0}" = "1" ]; then
+				log "$disk 无分区, 且显式开启格式化(/etc/nvme-automount.format), 自动建 GPT+ext4"
+				make_blank "$disk" "$idx" || continue
+				parts="$(basename "$d")p1 "
+			else
+				log "$disk 无分区/无文件系统, 按策略不格式化(保护盘内数据), 跳过"
 				continue
 			fi
-			make_blank "$disk" "$idx" || continue
-			parts="$(basename "$d")p1 "
 		fi
 
 		local first=1
