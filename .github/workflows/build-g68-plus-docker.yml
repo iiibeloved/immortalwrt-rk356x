@@ -133,13 +133,17 @@ jobs:
           echo "== 基础配置: $CONFIG_FILE"
           grep -E '^CONFIG_TARGET_(BOARD|SUBTARGET|PROFILE|ARCH_PACKAGES|KERNEL_PARTSIZE)=' "$CONFIG_FILE" || true
 
-          # 基线指纹软校验: 与 docs/baseline.sha256 比对, 不一致只告警(不阻断)
+          # 基线指纹强校验: 与 docs/baseline.sha256 比对, 不一致直接失败(阻断构建)
+          # 有意修改基线文件后, 执行 ./scripts/update-baseline.sh 重新生成并提交
           if [ -f docs/baseline.sha256 ]; then
             if sha256sum -c docs/baseline.sha256 --quiet >/dev/null 2>&1; then
-              echo "== 基线指纹校验: 通过"
+              echo "== 基线指纹校验: 通过（仓库处于冻结基线）"
+              echo "**基线指纹** ✅ 与 \`docs/baseline.sha256\` 一致" >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "::warning::仓库内容与 docs/baseline.sha256 记录的基线不一致(若有意修改, 请同步刷新该文件)"
-              sha256sum -c docs/baseline.sha256 2>&1 | grep -v ': OK$' | head -5 || true
+              echo "::error::仓库内容与 docs/baseline.sha256 不一致 —— 若有意义修改, 请执行 ./scripts/update-baseline.sh 并提交后重试"
+              sha256sum -c docs/baseline.sha256 2>&1 | grep -v ': OK$' | head -10 || true
+              echo "**基线指纹** ❌ 与 \`docs/baseline.sha256\` 不一致（已阻断构建）" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
             fi
           fi
           if [ -n "${EXTRA_CONFIG:-}" ] && [ -f "$EXTRA_CONFIG" ]; then

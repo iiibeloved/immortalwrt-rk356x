@@ -1,7 +1,7 @@
-# 基线指纹（2026-11-07 冻结）
+# 基线指纹（改动后请执行 scripts/update-baseline.sh 重新生成）
 # 校验: sha256sum -c docs/baseline.sha256
 908855b1d006c80b759e9645068539e8ce265017c02d65cd008310201bc01b4e  defconfig/g68-plus-istoreos.config
-3d05e23ff9df443c8accb581cbd46881814792228a4b49445769327f15568a85  .github/workflows/build-g68-plus-docker.yml
+324202257d894b0ee0fdc4a12a778c46a056fef609cc502149d86641b3f711ca  .github/workflows/build-g68-plus-docker.yml
 5990b8bb7bd53886743551e3a33a8de621bd77593c3379d237fdb632c1fbbcf2  .github/workflows/publish-release.yml
 f6d59494a9c88f5fe4e2175f00067eb5b5160a32b903b0a16f726a7b99903e98  scripts/gen_image_generic.sh
 042a03536f46cc1bb367e44d1c31a666277f33c67caec6f61cfc0f3b1d66cab4  files/etc/config/portled

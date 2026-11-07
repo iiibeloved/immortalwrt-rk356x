@@ -19,6 +19,7 @@
 | 下次构建预期 | 11-08 02:00 起约 3.5–4 小时（保留 ss-rust）→ 成功后自动发布 `g68-plus-2026.11.08` Release（免登录直链） |
 | 构建失败 | 自动开 Issue：标题 `CI 构建失败: … #<run>`，正文含失败步骤、run 链接与排查指引；同类未关闭则追加评论 |
 | 详细步骤 | [docs/build-guide.md](docs/build-guide.md)（触发方式 / 24 步流程 / 失败速查表 / 注意事项） |
+| **基线** | 冻结于 `d83f4b52`（17 个文件指纹）· CI 强校验，偏离即构建失败 · 校验 `sha256sum -c docs/baseline.sha256` |
 | **固件包清单** | [docs/packages.md](docs/packages.md)（上一版 **549 个包**；11-08 版新增 3 个 kmod，构建后刷新） |
 
 ---
