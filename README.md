@@ -160,6 +160,9 @@ ls bin/targets/rockchip/armv8/
 
 ## 注意事项
 
+1. **刷完默认 LAN 地址是 `192.168.100.1`**（首启由 `/etc/uci-defaults/99-set-lan-ip` 改好），DHCP 池 192.168.100.100–249；要换地址直接 `uci set network.lan.ipaddr=...`。
+2. `uci-defaults` 里的 5 个脚本是**一次性**的（执行成功即自动删除）；`/etc/init.d/` 里 4 个每次开机运行但都幂等 —— 详见 [build-guide 附录 D](docs/build-guide.md)。
+
 1. 构建中途取消会丢失 `dl` / `.ccache` 缓存，下次仍需重拉 feeds 与重编。
 2. 改 `docs/` 或 workflow 不会触发构建；只有改 `defconfig/` 下两个文件才会。
 3. cron 是 UTC：`0 18 * * 0` 对应**周一 02:00（北京时间）**。

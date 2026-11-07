@@ -16,3 +16,4 @@ a3d4d4dd7c63bd15181474622e77a439c698d415ffe1ed2ef40d4116eb07783c  files/etc/opkg
 3ea3fc0ba31c8f2efa3bf43422589a695bc5d713d3f78a144581986e0acc0f59  files/etc/uci-defaults/98-fix-ttyd
 91975c4b61ab5b3545f4e0698600c744497cf03496c814860bf8ffb643616a15  files/etc/uci-defaults/98-portled
 d6004e6311752baa9c49467f68ac3f1b7edf859bcee8679c6441fa9ed3f9ffc6  files/etc/uci-defaults/99-opkg-istore
+f48add100eb91cd175351357022cf76dbb4a68318471e2695cb98eca333208cd  files/etc/uci-defaults/99-set-lan-ip

@@ -622,3 +622,37 @@ https://gh-proxy.com/https://github.com/iiibeloved/immortalwrt-rk356x/releases/d
 > `github.moeyy.xyz`、`hub.gitmirror.com`、`ghproxy.cc` 当时不可用。
 >
 > 每次构建的 Release 说明页也会自动列出这三条加速链接（workflow 的「发布到 Release」步骤生成）。
+
+
+## 附录 D. 内置脚本的运行时机（一次性 / 每次开机）
+
+| 脚本 | 位置 | 运行时机 | 会不会每次重启都跑 | 幂等保护 |
+| --- | --- | --- | --- | --- |
+| `98-enable-custom-initd` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（OpenWrt 执行成功即删除该文件） | — |
+| `98-fix-ttyd` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（同上） | 只在存在 `interface` 时才改 |
+| `98-portled` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（同上） | — |
+| `99-set-lan-ip` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（同上） | 已是目标地址则直接跳过 |
+| `99-opkg-istore` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（同上） | 已有 arch 行则不重复加 |
+| `docker-disk` | `/etc/init.d/`（已 enable） | 每次开机 | 会进入，但**看到 `/etc/.docker-disk.done` 立刻返回** | 完成标记 + flock + 已有分区复用 + 已有 FS 不重格 |
+| `docker-dataroot` | `/etc/init.d/`（已 enable） | 每次开机 | 会，但只在检测到外挂盘且 docker 未手动指定时才动作 | `/etc/.docker-dataroot` 标记 |
+| `nvme-automount` | `/etc/init.d/`（已 enable） | **每次开机**（有意为之） | 会，但已挂载则跳过、fstab 按 UUID 去重 | 天然幂等 |
+| `portled` | `/etc/init.d/`（已 enable） | 每次开机 | 会（**必须**，否则 LED 状态每次开机会被内核重置） | 按配置重新应用 |
+
+**结论**：`uci-defaults` 那 5 个是**一次性**的，跑成功后被 OpenWrt 自动删除（失败的会保留、下次再试）；
+`/etc/init.d/` 里的 4 个是**常驻**的，每次开机都会执行，但都带幂等/守卫逻辑，**不会重复分区、重复格式化或重复写 fstab**。
+
+想手动重置某一步：
+
+```sh
+rm -f /etc/.docker-disk.done /etc/.docker-disk.rebooted   # 允许 docker-disk 重新执行
+/etc/init.d/docker-disk start
+```
+
+## 附录 E. 默认 LAN 管理地址
+
+固件首次启动会把 LAN 改成 **`192.168.100.1/24`**（由 `/etc/uci-defaults/99-set-lan-ip` 完成，一次性脚本）：
+
+- 管理页：`http://192.168.100.1`
+- DHCP 池：`192.168.100.100 – 192.168.100.249`（`dhcp.lan` 的 start/limit 是相对网段的偏移，改网段后自动跟随）
+- 改完地址后旧网段（192.168.1.x）的会话会断开，电脑重新获取 DHCP 即可
+- 想改回或换别的地址：`uci set network.lan.ipaddr=192.168.1.1 && uci commit network && /etc/init.d/network reload`

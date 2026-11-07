@@ -1,0 +1,25 @@
+#!/bin/sh
+# =============================================================================
+#  首次启动把 LAN 管理地址改为 192.168.100.1/24
+#
+#  为什么用 uci-defaults 而不是内置整份 /etc/config/network:
+#    这台机器的 lan/wan 端口映射由 /etc/board.d/02_network 按设备生成, 直接覆盖
+#    network 配置容易写错端口; 这里只改 IP, 端口/桥接保持板级默认。
+#
+#  DHCP 池不需要改: dhcp.lan.start=100 / limit=150 是相对网段的偏移,
+#  改完网段后自动变成 192.168.100.100 - 192.168.100.249。
+#
+#  注意: 本脚本在 /etc/init.d/boot 阶段执行(早于 network 启动), 所以改完配置
+#  本次开机的 network 服务就会用新地址; 脚本执行成功后被 uci-defaults 机制删除。
+# =============================================================================
+LOG=/etc/lan-ip.log
+log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
+
+CUR=$(uci -q get network.lan.ipaddr)
+[ "$CUR" = "192.168.100.1" ] && { log "LAN 已是 192.168.100.1, 跳过"; exit 0; }
+
+uci -q set network.lan.ipaddr='192.168.100.1' || exit 1
+uci -q set network.lan.netmask='255.255.255.0' || exit 1
+uci -q commit network || exit 1
+log "LAN 地址: ${CUR:-192.168.1.1} -> 192.168.100.1/24"
+exit 0

@@ -34,6 +34,7 @@
 | `files/etc/uci-defaults/98-fix-ttyd` | `3ea3fc0ba31c8f2efa3bf43422589a695bc5d713d3f78a144581986e0acc0f59` |
 | `files/etc/uci-defaults/98-portled` | `91975c4b61ab5b3545f4e0698600c744497cf03496c814860bf8ffb643616a15` |
 | `files/etc/uci-defaults/99-opkg-istore` | `d6004e6311752baa9c49467f68ac3f1b7edf859bcee8679c6441fa9ed3f9ffc6` |
+| `files/etc/uci-defaults/99-set-lan-ip` | `f48add100eb91cd175351357022cf76dbb4a68318471e2695cb98eca333208cd` |
 
 > 上面这几张表合起来就是「基线」的完整指纹：改了任何一个文件，对应 sha256 都会变，可据此判断仓库是否偏离基线。
 
