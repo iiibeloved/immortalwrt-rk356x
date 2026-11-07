@@ -368,6 +368,11 @@ cat /etc/.docker-disk.log ; logread | grep docker-disk           # 日志
 想改 docker 分区容量：改脚本里的 `DOCKER_MIB`（默认 **51200 = 50 GiB**；阈值会自动跟着变 = DOCKER_MIB + 8 GiB），
 或改 `DOCKER_LABEL` / `DATA_LABEL` / 挂载点。
 
+**踩过的坑（2026-11-08 修复）**：ImmortalWrt 里 `/rom` 的挂载源显示为 **`/dev/root`**（squashfs 虚拟设备名），
+旧版 `boot_disk()` 直接拿它去 `/sys/class/block/` 查父磁盘 → 查不到 → 脚本静默跳过，表现为「刷完没有 p5/p6、docker 仍在 `/opt/docker`」。
+现版本先 `readlink -f` 解析软链（`/dev/root` → `/dev/mmcblk0p2`），失败再用 `lsblk -no PKNAME` 兜底，并会在日志里明确记录原因。
+已刷旧固件的机器需手动：`parted` 建 p4/p5/p6 → 重启 → `mkfs` + `mount` + `block detect`。
+
 **对 iStore 商店的意义**：商店的「快速安装」向导必须从 `/admin/store/get_block_devices`
 （内部执行 `block info`）里选一个**存储位置**。拆盘成功前系统只有 p1/p2/p3 三个系统分区，
 列表为空 → 安装按钮点不动。拆盘并挂载后就会出现 `/mnt/ext_relay` 与 `/mnt/data`，选后者即可安装。

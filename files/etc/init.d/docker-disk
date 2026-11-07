@@ -40,11 +40,28 @@ MIN_FREE_MIB=$(( DOCKER_MIB + MIN_DATA_MIB ))   # 需 50 GiB + 8 GiB 才动手
 log() { echo "$(date '+%F %T') $*" >> "$LOG"; logger -t docker-disk "$*" 2>/dev/null; }
 
 boot_disk() {
-	local part
+	# 注意: ImmortalWrt 里 /rom 常显示为 /dev/root（squashfs 的虚拟设备名），
+	# 必须先 readlink -f 解析成真实分区(如 /dev/mmcblk0p2)，否则在 sysfs 里查不到父磁盘。
+	local part real sys
 	part=$(awk '$2 == "/rom" {print $1; exit}' "$MOUNTS")
 	[ -n "$part" ] || part=$(awk '$2 == "/overlay" {print $1; exit}' "$MOUNTS")
-	[ -b "$part" ] || return 1
-	basename "$(readlink -f "$BLOCKDIR/$(basename "$part")/..")"
+	[ -n "$part" ] || return 1
+
+	real=$(readlink -f "$part" 2>/dev/null) || real="$part"
+	for cand in "$real" "$part"; do
+		sys="$BLOCKDIR/$(basename "$cand")"
+		[ -e "$sys" ] || [ -L "$sys" ] || continue
+		basename "$(readlink -f "$sys/..")"
+		return 0
+	done
+
+	# 兜底: 让 lsblk 解析软链并取父磁盘名
+	if command -v lsblk >/dev/null 2>&1; then
+		local pk
+		pk=$(lsblk -no PKNAME "$part" 2>/dev/null | head -1 | tr -d ' \n')
+		[ -n "$pk" ] && { echo "$pk"; return 0; }
+	fi
+	return 1
 }
 
 disk_size_bytes() { echo $(( $(cat "$BLOCKDIR/$1/size") * 512 )); }
@@ -143,6 +160,12 @@ start() {
 
 	local size end free_mib start_mib dev
 
+	size=$(disk_size_bytes "$DISK" 2>/dev/null || echo 0)
+	if [ "${size:-0}" -le 0 ]; then
+		log "无法读取 $DISK 的容量(/sys/class/block/$DISK/size), 放弃"
+		return 0
+	fi
+
 	# 已存在两块盘: 只挂载
 	if [ -n "$(label_of "$DOCKER_LABEL")" ] && [ -n "$(label_of "$DATA_LABEL")" ]; then
 		log "已存在 LABEL=$DOCKER_LABEL / $DATA_LABEL, 只挂载"
@@ -154,7 +177,6 @@ start() {
 		return 0
 	fi
 
-	size=$(disk_size_bytes "$DISK")
 	end=$(last_part_end_bytes "$DISK")
 	free_mib=$(( (size - end) / 1048576 ))
 	log "启动盘 /dev/$DISK 总 $((size/1073741824)) GiB, 已用 $((end/1073741824)) GiB, 剩余 ${free_mib} MiB"
