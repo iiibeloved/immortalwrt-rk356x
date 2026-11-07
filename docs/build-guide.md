@@ -432,6 +432,33 @@ uci commit dockerd && /etc/init.d/dockerd restart
 
 （也可以在镜像里把 `nvme-automount` 的 `START` 调到 56，让 `docker-dataroot` 自动优先选 NVMe。）
 
+### 7.12 修掉 TTYD 终端「已拒绝连接」（改 LAN IP 后必现）
+
+**症状**：改过 LAN 管理地址（或换网段）后，LuCI 里的 TTYD 终端打不开，浏览器报「已拒绝连接 / ERR_CONNECTION_REFUSED」。
+
+**原因**：上游 `/etc/config/ttyd` 默认有 `option interface '@lan'`，`/etc/init.d/ttyd` 会把它翻成
+`ttyd -i <LAN 网卡>`。ttyd 只在**启动那一刻**绑定该网卡当时的地址；之后 LAN IP 变了，
+监听 socket 还停在旧地址，新地址自然连不上（重启 ttyd 或重启路由器就能临时恢复，但下次改 IP 又会出现）。
+
+**固件内的处理**（无需再手改 init 脚本）：
+
+1. 内置 `/etc/config/ttyd` **不设置** `interface`，即 ttyd 监听 `0.0.0.0:7681`，任何已放行网段都可访问，改 IP 不受影响；
+2. 首次启动 `/etc/uci-defaults/98-fix-ttyd` 会**删掉**已有配置里的 `interface` 项（保留其它选项），
+   `enable` 并 `restart` 一次，日志写 `/etc/ttyd-fix.log`。
+
+**已经刷好的旧固件想立刻修**（SSH 执行，无需重编）：
+
+```sh
+uci -q delete ttyd.@ttyd[0].interface
+uci commit ttyd
+/etc/init.d/ttyd enable
+/etc/init.d/ttyd restart
+netstat -lntp | grep 7681        # 应看到 0.0.0.0:7681（而不是旧的 LAN IP）
+```
+
+**安全提醒**：监听 `0.0.0.0` 只代表「不受网卡 IP 变化影响」，WAN 侧仍由防火墙默认策略拦截（没有放行 7681 的规则）；
+不要把 7681 加到 WAN 区域，也不要用 root 空密码。
+
 ### 7.9 回滚 / 删除发布### 7.9 回滚 / 删除发布
 
 ```bash

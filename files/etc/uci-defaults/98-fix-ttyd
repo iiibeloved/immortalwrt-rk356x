@@ -1,0 +1,20 @@
+#!/bin/sh
+# =============================================================================
+#  首次启动修正 ttyd:
+#    1) 去掉 option interface(上游默认 '@lan'), 避免改 LAN IP 后终端"已拒绝连接"
+#    2) 确保 ttyd 已 enable 并重启一次使新配置生效
+#  保留用户的其它 ttyd 选项, 只删 interface 这一项。
+# =============================================================================
+LOG=/etc/ttyd-fix.log
+[ -x /etc/init.d/ttyd ] || exit 0
+
+if uci -q get ttyd.@ttyd[0].interface >/dev/null 2>&1; then
+	uci -q delete ttyd.@ttyd[0].interface
+	uci -q commit ttyd
+	echo "$(date '+%F %T') removed ttyd interface binding (@lan)" >> "$LOG"
+fi
+
+/etc/init.d/ttyd enable >/dev/null 2>&1
+/etc/init.d/ttyd restart >/dev/null 2>&1
+echo "$(date '+%F %T') ttyd enabled & restarted; current=$(uci -q get ttyd.@ttyd[0].port)" >> "$LOG"
+exit 0
