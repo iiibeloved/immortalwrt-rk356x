@@ -93,7 +93,7 @@ gh run list --repo iiibeloved/immortalwrt-rk356x --limit 3
 
 ---
 
-## 2. 编译过程（22 个步骤，按实际执行顺序）
+## 2. 编译过程（24 个步骤，按实际执行顺序）
 
 | # | 步骤 | 实测耗时 | 说明 |
 | --- | --- | --- | --- |
@@ -447,3 +447,24 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
 - [ ] 决定是否 `publish_release`（默认 true）
 - [ ] 触发方式：等周一 02:00 定时 / 或手动 Run workflow
 - [ ] 构建结束后：看 Job Summary 的包表格 → 下载 artifact 或 Release → 校验 sha256 → 刷机
+
+
+## 附录 A. 当前冻结基线
+
+2026-11-07 起，`defconfig/g68-plus-istoreos.config` + 本 workflow 作为**最终基线**：定时构建与手动构建都用它，
+不再有临时改动/一次性 cron。基线产物：
+
+| 项目 | 值 |
+| --- | --- |
+| 构建 | run #42337188896（2026-11-07，549 个包，24 步全绿） |
+| Release | `g68-plus-2026.11.07-r12` |
+| 镜像 sha256 | `0ecc1541a381669861c45f8a505d077e97a986697064a4ab5d8fddfc8d3a9e96` |
+| 分区 | kernel 16 MiB / rootfs 200 MiB / rootfs_data 4096 MiB |
+| 首次启动自动拆盘 | 50 GiB `ext_relay`（docker）+ 其余 `Data`（共享） |
+| 完整包清单 | [packages.md](packages.md) |
+
+**基线校验**：想确认仓库未被改动，比对 `docs/packages.md` 顶部的三个 sha256
+（`g68-plus-istoreos.config`、`build-g68-plus-docker.yml`、`gen_image_generic.sh`）即可。
+
+**要偏离基线时**（例如临时试别的 rootfs 大小），不要改默认值，直接 Run workflow 显式传参，
+构建产物会带 `-r<run_number>` 后缀，基线不受影响。

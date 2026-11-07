@@ -18,7 +18,8 @@
 | 当前仓库配置 | **保留 `shadowsocks-rust`**（构建约 4 小时）· **`rootfs` 200 MiB（与 fork 一致）+ `rootfs_data` 4096 MiB** · 22 个 iStoreOS 风格包 + samba4 + docker 引擎 |
 | 下次构建预期 | ≈ 2.5 小时；成功后自动发布 `g68-plus-2026.11.09` Release（免登录直链） |
 | 构建失败 | 自动开 Issue：标题 `CI 构建失败: … #<run>`，正文含失败步骤、run 链接与排查指引；同类未关闭则追加评论 |
-| 详细步骤 | [docs/build-guide.md](docs/build-guide.md)（触发方式 / 22 步流程 / 失败速查表 / 12 条注意事项） |
+| 详细步骤 | [docs/build-guide.md](docs/build-guide.md)（触发方式 / 24 步流程 / 失败速查表 / 注意事项） |
+| **固件包清单** | [docs/packages.md](docs/packages.md)（当前基线 **549 个包**，含重点应用说明与全量版本表） |
 
 ---
 
@@ -118,7 +119,8 @@ sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img of=/d
 
 | 文档 | 内容 |
 | --- | --- |
-| [docs/build-guide.md](docs/build-guide.md) | **下次编译详细教程**：触发方式、22 步流程与实测耗时、产物下载、刷机、失败速查表、12 条注意事项、30 秒检查清单 |
+| [docs/build-guide.md](docs/build-guide.md) | **下次编译详细教程**：触发方式、24 步流程与实测耗时、产物下载、刷机、失败速查表、12 条注意事项、30 秒检查清单 |
+| [docs/packages.md](docs/packages.md) | **固件包清单**（冻结基线 549 包，重点应用 + 全量分类表 + 基线指纹） |
 | [docs/ci-build.md](docs/ci-build.md) | 构建方案设计、依赖来源表、实测记录与已踩过的坑 |
 | [.github/workflows/publish-release.yml](.github/workflows/publish-release.yml) | 把任意历史 run 的 artifact 补发到指定 Release |
 
