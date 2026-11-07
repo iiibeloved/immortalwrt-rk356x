@@ -132,6 +132,16 @@ jobs:
           [ -f "$CONFIG_FILE" ] || { echo "::error::找不到基础 defconfig: $CONFIG_FILE"; exit 1; }
           echo "== 基础配置: $CONFIG_FILE"
           grep -E '^CONFIG_TARGET_(BOARD|SUBTARGET|PROFILE|ARCH_PACKAGES|KERNEL_PARTSIZE)=' "$CONFIG_FILE" || true
+
+          # 基线指纹软校验: 与 docs/baseline.sha256 比对, 不一致只告警(不阻断)
+          if [ -f docs/baseline.sha256 ]; then
+            if sha256sum -c docs/baseline.sha256 --quiet >/dev/null 2>&1; then
+              echo "== 基线指纹校验: 通过"
+            else
+              echo "::warning::仓库内容与 docs/baseline.sha256 记录的基线不一致(若有意修改, 请同步刷新该文件)"
+              sha256sum -c docs/baseline.sha256 2>&1 | grep -v ': OK$' | head -5 || true
+            fi
+          fi
           if [ -n "${EXTRA_CONFIG:-}" ] && [ -f "$EXTRA_CONFIG" ]; then
             echo "== 附加配置: $EXTRA_CONFIG"
             echo "   差异项: $(grep -cE '^CONFIG_[A-Z0-9_]+=' "$EXTRA_CONFIG" || true) 行"

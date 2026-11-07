@@ -565,6 +565,15 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
 **要偏离基线时**（例如临时试别的 rootfs 大小），不要改默认值，直接 Run workflow 显式传参，
 构建产物会带 `-r<run_number>` 后缀，基线不受影响。
 
+**基线指纹文件**：[`docs/baseline.sha256`](baseline.sha256)（16 个文件：2 个 defconfig、2 个 workflow、
+`gen_image_generic.sh`、`files/` 全部脚本与配置）。校验方式：
+
+```bash
+sha256sum -c docs/baseline.sha256      # 全部 OK = 仓库仍在基线状态
+```
+
+CI 也会在「校验配置并打印目标」步骤里做一次**软校验**：不一致时打 `::warning::` 并列出差异文件，但不阻断构建。
+
 
 ## 附录 B. 基线自检（2026-11-07 全面检查结果）
 
