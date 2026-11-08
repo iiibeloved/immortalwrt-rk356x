@@ -241,6 +241,9 @@ cat bin/targets/rockchip/armv8/sha256sums
 > 或 **LAN 接上级 LAN**（交换机/AP 模式，需关本机 DHCP 并把 LAN 改到上游网段，见
 > [build-guide 附录 J](docs/build-guide.md)）。两种方式下 docker、HA、opkg 都能正常上网。
 >
+> **要拿它当主路由（撤掉上级路由）**：WAN 直接接光猫 —— 光猫桥接就用 `wan.proto=pppoe` + 账号密码；
+> 光猫拨号则用 `wan.proto=dhcp`。PPPoE 所需包（`ppp` / `ppp-mod-pppoe` / `kmod-pppoe`）已内置。详见附录 J「方案 A+」。
+>
 > **首次开机操作要点**：LAN 接电脑、WAN 接上级（可选但推荐）；通电后**不要登录、不要断电**，
 > 固件会在 1–3 分钟内**自动重启一次**（正常）；第二次开机后再等 2–5 分钟（后台格式化 50 GiB `ext_relay` + `Data`），
 > 然后访问 `http://192.168.100.1`。

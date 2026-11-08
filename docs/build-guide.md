@@ -967,6 +967,54 @@ ls -l /etc/.docker-disk.*     # .done 表示已完成; .rebooted 表示已重启
 - 代价是**双重 NAT**：外网访问内网服务需要在上游路由和本机各做一次端口映射；
 - 本机自身出网正常（`opkg update`、拉取 docker 镜像都没问题）。
 
+### 方案 A+：本机作为主路由（撤掉上级路由）
+
+如果这台要**直接当主路由**（上级路由撤掉，WAN 直接接光猫），比方案 A 更简单：只有一层 NAT，
+端口映射只在本机做一次。按光猫的工作模式分两种：
+
+**① 光猫改桥接 + 本机 PPPoE 拨号（推荐，性能与可控性最好）**
+
+```sh
+uci set network.wan.proto='pppoe'
+uci set network.wan.username='宽带账号'
+uci set network.wan.password='宽带密码'
+uci set network.wan.ipv6='1'          # 需要 IPv6 时
+uci commit network
+/etc/init.d/network reload
+```
+
+**② 光猫保持路由模式（光猫拨号）→ 本机 WAN 用 DHCP**
+
+```sh
+uci set network.wan.proto='dhcp'
+uci set network.wan.ipv6='1'
+uci commit network
+/etc/init.d/network reload
+```
+
+> 这种情况仍是「光猫 NAT + 本机 NAT」两层，但普通上网/Docker/HA 完全够用；
+> 要从外网访问内网，两层都要做端口映射（或把本机 WAN 设成光猫网段内的固定 IP 后放 DMZ）。
+
+**验证 WAN 是否起来**
+
+```sh
+ubus call network.interface.wan status | grep -E '"up"|"proto"|address'
+ip -4 addr show | grep -A2 'wan'
+ping -c3 223.5.5.5 && ping -c3 www.baidu.com      # 通外网 + 通 DNS
+```
+
+**撤掉上级路由后要确认的几件事**
+
+| 项 | 说明 |
+| --- | --- |
+| 网段不冲突 | 本机 LAN `192.168.100.1/24`；光猫若是 `192.168.1.1` 没问题，若也是 `192.168.100.x` 就改本机 |
+| MAC 绑定 | 运营商若绑定了旧路由 MAC：`uci set network.wan.macaddr='旧路由MAC'`（或 LuCI「WAN → 高级 → 覆盖 MAC」） |
+| 端口映射 | 只需在本机「防火墙 → 端口转发」做一次；光猫若是路由模式则光猫里再做一次 |
+| IPv6 | 桥接 + PPPoE 时 `wan.ipv6=1`，LAN 默认 `ip6assign`；光猫路由模式需开启前缀委派 |
+| DNS | 默认跟随 WAN；想用公共 DNS：`uci add_list network.wan.dns='223.5.5.5'`（UCI 里是 `network.wan.peerdns='0'` + `dns`） |
+| 无线 | 本机若有 Wi-Fi 模块需单独配置；纯有线时忽略 |
+| 固件包 | PPPoE 所需 `ppp` + `ppp-mod-pppoe` + `kmod-pppoe` 已内置（manifest 可查） |
+
 ### 方案 B：交换机 / AP 模式（同级网段）
 
 ```
