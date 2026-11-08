@@ -699,6 +699,19 @@ rm -f /etc/.docker-disk.done /etc/.docker-disk.rebooted   # 允许 docker-disk �
 路径命名与 LuCI 下拉选项一致（`<挂载点>/Configs/HomeAssistant`），所以页面会回显已选中；HACS 装进 `/config/custom_components` 即正常。
 日志：`/etc/ha-config.log`。
 
+**HACS 说明**：Home Assistant 自 **2026.11** 起用内置 **Marketplace** 取代 HACS（官方文档
+`https://www.home-assistant.io/integrations/marketplace`），HACS 安装脚本会直接退出：
+
+```
+ERROR: HACS does not work on Home Assistant 2026.11 and newer (found 2026.11.0), as it has been replaced by the native Marketplace integration.
+```
+
+固件用 `files/usr/libexec/istorec/homeassistant.sh` 覆盖了 iStore 的安装脚本：先读容器内 `/config/.HA_VERSION`，
+`>= 2026.11` 时**跳过 HACS 步骤并打印 Marketplace 使用提示**，不再刷 ERROR；其余安装逻辑与上游一致。
+
+- 用 Marketplace：HA 界面 **设置 → Marketplace**；右上角 ⋮ → *Download source* 可切「Chinese Community Relays」加速；*Add from link* 可加 GitHub 上的自定义仓库。
+- 确实要 HACS：把镜像换成 `2026.10.x` 的旧标签（应用页面「镜像」下拉里没有，需要 `uci set homeassistant.@homeassistant[0].image_name='homeassistant/home-assistant:2026.10.4'` 后重装），但会失去新特性与安全更新，不推荐。
+
 **怎么确认**
 
 ```sh
