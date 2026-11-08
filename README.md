@@ -137,7 +137,7 @@ docker info | grep -i 'docker root dir'
 | **其他** | `luci-app-wolplus` + `etherwake`（网络唤醒）、`luci-theme-argon`、`ca-certificates`、`curl` |
 | **软件源** | 内置 `/etc/opkg/distfeeds.conf`：官方 6 个（24.10.0）+ iStoreOS 3 个（store / nas_luci / nas） |
 
-完整 **552 个包**（含版本）见 **[docs/packages.md](docs/packages.md)**。
+完整 **556 个包**（含版本）见 **[docs/packages.md](docs/packages.md)**。
 
 ---
 

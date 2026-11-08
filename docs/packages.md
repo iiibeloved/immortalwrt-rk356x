@@ -2,15 +2,15 @@
 
 > 由构建产物 `immortalwrt-rockchip-armv8-nsy_g68-plus.manifest` 直接生成，非手写。
 
-- **基线产物**：run [#42395804653](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42395804653) · Release [`g68-plus-2026.11.08`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08) · **552 个包**
-- **镜像 sha256**：`d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f`
+- **当前产物**：run [#42434898000](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42434898000) · Release [`g68-plus-2026.11.08-r23`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08-r23) · **556 个包**（含 DDNS 6 包）
+- **镜像 sha256**：`ecac5ee2e95c52c7210e28b54109c6b1d50e829b8653859a6be7fd8d0cbc2eb5`
 - 与上一版（549 包）差异：**+`kmod-fs-f2fs`、+`kmod-fs-xfs`、+`kmod-crypto-crc32`**（NTFS3 自 r12 起已内置）
 
 ## 基线指纹
 
 | 文件 | sha256 |
 | --- | --- |
-| `defconfig/g68-plus-istoreos.config` | `c11c7b6d735dfe5f0a89d4d8bbf3d4c34677aca1a1d66af8e86f665a7881b953` |
+| `defconfig/g68-plus-istoreos.config` | `496aa505c0c2de1585a9a6fe27c50d1a3a28a5e7ab7b92d5c6ce571aed487794` |
 | `.github/workflows/build-g68-plus-docker.yml` | `fbee12124d69d9b51fb6a6279360f1a9440133720de7f0bbe2bf5f01280bcd21` |
 | `scripts/gen_image_generic.sh` | `f6d59494a9c88f5fe4e2175f00067eb5b5160a32b903b0a16f726a7b99903e98` |
 | 固件镜像 `*.img.gz` | `d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f` |
