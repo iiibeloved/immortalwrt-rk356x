@@ -237,6 +237,10 @@ cat bin/targets/rockchip/armv8/sha256sums
 
 ## 7. 下载与刷机
 
+> **接在上游路由后面？** 两条路都行：**WAN 接上级 LAN**（默认路由模式，双重 NAT，免配置）；
+> 或 **LAN 接上级 LAN**（交换机/AP 模式，需关本机 DHCP 并把 LAN 改到上游网段，见
+> [build-guide 附录 J](docs/build-guide.md)）。两种方式下 docker、HA、opkg 都能正常上网。
+>
 > **首次开机操作要点**：LAN 接电脑、WAN 接上级（可选但推荐）；通电后**不要登录、不要断电**，
 > 固件会在 1–3 分钟内**自动重启一次**（正常）；第二次开机后再等 2–5 分钟（后台格式化 50 GiB `ext_relay` + `Data`），
 > 然后访问 `http://192.168.100.1`。
