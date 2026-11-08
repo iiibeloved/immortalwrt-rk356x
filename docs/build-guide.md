@@ -382,6 +382,9 @@ cat /etc/.docker-disk.log ; logread | grep docker-disk           # 日志
 | 无 NVMe 时开机白等 20 秒 | 没有 NVMe 硬件的机器 | 先看 `NVME_CLASS`(/sys/class/nvme)，无控制器立即返回并记日志 |
 | 策略调整：NVMe 只挂载不格式化 | 旧版会对空白盘自动建 GPT+ext4（有误格式化风险） | **默认改为只挂载、保留盘内数据**；需要格式化必须显式开启标记 |
 
+**与安装位置的关系**：拆盘成功后，docker 走 `/mnt/ext_relay/docker`，iStore 的**程序**仍在 `/overlay`、
+**数据**建议选 `/mnt/data` —— 完整对照见[附录 F](#附录-f-存储分布与安装位置docker--istore)。
+
 **对 iStore 商店的意义**：商店的「快速安装」向导必须从 `/admin/store/get_block_devices`
 （内部执行 `block info`）里选一个**存储位置**。拆盘成功前系统只有 p1/p2/p3 三个系统分区，
 列表为空 → 安装按钮点不动。拆盘并挂载后就会出现 `/mnt/ext_relay` 与 `/mnt/data`，选后者即可安装。

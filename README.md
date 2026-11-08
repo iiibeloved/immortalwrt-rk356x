@@ -93,6 +93,24 @@ p4 extended ── p5 ext4 ext_relay  50 GiB  → /mnt/ext_relay   (docker 数�
 | iStore 应用**数据**（部分带向导的应用） | 你在「存储位置」里选的那块盘，建议 **`/mnt/data`** | 选择结果写入 `uci get istore.istore.last_path`，仅用于应用数据目录 |
 | 共享文件 / 下载 | `/mnt/data`（p6） | samba4、NFS、filemanager 的共享根建议指向这里 |
 
+**确认当前落盘**
+
+```sh
+docker info | grep -i 'docker root dir'    # 期望 /mnt/ext_relay/docker
+df -h /overlay /mnt/ext_relay /mnt/data    # overlay(=iStore 程序) 是否吃紧
+du -sh /mnt/ext_relay/docker               # docker 实际占用
+uci get istore.istore.last_path            # 商店里选的应用数据目录
+```
+
+**要把 docker 换到别的盘**（例如空间更大的 `/mnt/data` 或 NVMe）
+
+```sh
+docker ps -a                 # 先看清有哪些容器
+uci set dockerd.globals.data_root='/mnt/data/docker'
+uci commit dockerd && /etc/init.d/dockerd restart
+docker info | grep -i 'docker root dir'
+```
+
 > 如果 `docker info` 显示 `Docker Root Dir: /opt/docker`，说明拆盘脚本还没成功跑过（此时 docker 实际占用的是 overlay 的 4 GiB，很容易满）。
 > 如果 iStore 安装时报「空间不足」，那是 `/overlay`（4 GiB）满了，不是数据盘满了 —— 用 `df -h /overlay` 确认。
 
@@ -276,6 +294,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 | RJ45 网口灯 | 由 RTL8367S 交换芯片硬件驱动，`rtl8367b` 驱动未暴露 LED 属性，**软件无法开关**（`portled` 只控 GPIO 灯，如电源灯） |
 | 小盘设备 | eMMC 剩余 < 58 GiB 时不自动拆盘 → iStore「存储位置」为空，需手动建分区 |
 | NVMe 空白盘 | 默认**不**自动格式化（保护数据）；确需格式化请 `touch /etc/nvme-automount.format` 后重启 |
+| iStore 程序空间 | iStore 应用装在 `/overlay`（4 GiB），**不是**数据盘；装大应用前先看 `df -h /overlay` |
 | 首启一次重启 | 若内核未即时识别新分区，`docker-disk` 会自动重启一次再接续（最多一次，防循环） |
 | 时间同步 | RK3568 无电池 RTC，开机时间可能滞后；HTTPS 拉取失败时先 `date` 检查并等待 NTP |
 | 构建耗时 | 保留 ss-rust 时约 4 h 15 min；GitHub cron 偶有延迟/跳过，已用脚本核验兜底 |
