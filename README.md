@@ -295,6 +295,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 | 小盘设备 | eMMC 剩余 < 58 GiB 时不自动拆盘 → iStore「存储位置」为空，需手动建分区 |
 | NVMe 空白盘 | 默认**不**自动格式化（保护数据）；确需格式化请 `touch /etc/nvme-automount.format` 后重启 |
 | iStore 程序空间 | iStore 应用装在 `/overlay`（4 GiB），**不是**数据盘；装大应用前先看 `df -h /overlay` |
+| 更新列表报 iStoreOS 源 `Signature check failed` | 那三个源的签名 key 未公开，固件已默认注释；商店安装不受影响。详见 [build-guide 附录 H](docs/build-guide.md) |
 | opkg 装包报 `has no valid architecture` | 旧固件首启脚本把 `arch` 行拼接坏了（优先级变成 `10arch`）；修复命令见 [build-guide 附录 G](docs/build-guide.md) |
 | 首启一次重启 | 若内核未即时识别新分区，`docker-disk` 会自动重启一次再接续（最多一次，防循环） |
 | 时间同步 | RK3568 无电池 RTC，开机时间可能滞后；HTTPS 拉取失败时先 `date` 检查并等待 NTP |

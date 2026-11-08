@@ -759,3 +759,36 @@ opkg install luci-app-ddns luci-i18n-ddns-zh-cn
 2. `archs_ok` 校验每条 `arch` 行的**优先级必须是纯数字**；
 3. 校验失败 → 删掉全部 `arch` 行后**重建**标准四行（`all 1` / `noarch 1` / `aarch64_generic 10` / `aarch64_cortex-a53 5`）；
 4. 之后再等网络、校时、`opkg update`（3 次重试，仅签名失败时关校验）。
+
+> 装完 DDNS 后日志里出现 `WARN : Service section disabled! - TERMINATE` 是**正常的** ——
+> 表示 `/etc/config/ddns` 里还没有启用任何服务项；到 LuCI「服务 → 动态 DNS」添加一条（服务商 / 域名 / 密钥）即可。
+
+
+## 附录 H. iStoreOS 源「Signature check failed」说明
+
+`opkg update` 时三条 iStoreOS 源报签名失败，官方 6 个源全部 `Signature check passed`：
+
+```
+Downloading https://istore.istoreos.com/repo/all/store/Packages.sig
+Signature check failed.
+Remove wrong Signature file.
+```
+
+**原因**：iStoreOS 的 `store` / `nas_luci` / `nas` 三个仓库由 key **`1d15e401c11b3e0f`** 签名，
+该公钥未公开发布；仓库根目录只提供 `a56f16274c6d486b`（只能验证 `all/compat` 这一个子源）。
+
+**固件默认策略**：这三个源在 `/etc/opkg/distfeeds.conf` 里**默认注释掉**，因此 `opkg update` 干净无报错。
+
+| 场景 | 做法 |
+| --- | --- |
+| 在 **iStore 商店**装应用 | 直接用商店即可。商店走 `/bin/is-opkg`，有独立源列表（`istore.istoreos.com/repo/{all,aarch64_generic}/isfeeds.conf`）且**跳过签名校验** |
+| 想在 **LuCI 软件包**里直接装 iStoreOS 的包 | 取消 `distfeeds.conf` 里三行注释，并 `option check_signature 0`（或 `sed -i 's/^option check_signature.*/option check_signature 0/' /etc/opkg.conf`），再 `opkg update` |
+
+**已刷旧固件想立刻消除这三条报错**：
+
+```sh
+sed -i 's#^src/gz istore_#\#src/gz istore_#' /etc/opkg/distfeeds.conf
+opkg update        # 之后只会更新 6 个官方源
+```
+
+（不影响已安装的 iStore 与商店安装应用。）
