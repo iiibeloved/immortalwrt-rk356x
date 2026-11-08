@@ -717,3 +717,45 @@ uci commit dockerd && /etc/init.d/dockerd restart
 docker info | grep -i 'docker root dir'
 ```
 （迁移前先 `docker ps -a` 停掉容器，旧目录数据可 `cp -a` 过去。）
+
+
+## 附录 G. opkg 报「has no valid architecture」的根因与修复
+
+**现象**：`opkg install xxx` 对**任何包**都输出
+
+```
+Package luci-app-ddns version ... has no valid architecture, ignoring.
+...
+ * opkg_install_cmd: Cannot install package luci-app-ddns.
+```
+
+**根因**：`/etc/opkg.conf` 的架构段被拼接坏了。旧版首启脚本用 `echo 'arch aarch64_cortex-a53 5' >> /etc/opkg.conf` 追加，
+而该文件末尾原本**没有换行符**，于是最后一行变成：
+
+```
+arch aarch64_generic 10arch aarch64_cortex-a53 5
+```
+
+优先级字段成了 `10arch`，opkg 解析后认为**所有**包的架构都不受支持 → 全部忽略。
+
+**修复（已刷旧固件的机器，SSH 执行）**
+
+```sh
+cp /etc/opkg.conf /etc/opkg.conf.bak
+sed -i '/^arch[ 	]/d' /etc/opkg.conf
+printf 'arch all 1
+arch noarch 1
+arch aarch64_generic 10
+arch aarch64_cortex-a53 5
+' >> /etc/opkg.conf
+opkg print-architecture          # 应看到 4 行，优先级是纯数字
+opkg update
+opkg install luci-app-ddns luci-i18n-ddns-zh-cn
+```
+
+**固件侧修复**（`files/etc/uci-defaults/99-opkg-istore`）：
+
+1. 追加任何内容前先 `ensure_newline`（文件末尾无换行时补一个）；
+2. `archs_ok` 校验每条 `arch` 行的**优先级必须是纯数字**；
+3. 校验失败 → 删掉全部 `arch` 行后**重建**标准四行（`all 1` / `noarch 1` / `aarch64_generic 10` / `aarch64_cortex-a53 5`）；
+4. 之后再等网络、校时、`opkg update`（3 次重试，仅签名失败时关校验）。

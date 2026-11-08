@@ -1,21 +1,69 @@
 #!/bin/sh
 # =============================================================================
 #  首次启动准备 opkg：
-#    1) 补 arch（iStoreOS 的 nas 源是 aarch64_cortex-a53）
+#    1) 保证 /etc/opkg.conf 的架构表正确（否则所有包都会报 "has no valid architecture"）
 #    2) 等网络/DNS 就绪、必要时先校时（RK3568 无电池 RTC，时间不对会让 HTTPS 失败）
 #    3) opkg update 带重试；只在签名确实失败时才关闭签名校验
 #  日志：/etc/opkg-boot.log
 # =============================================================================
 LOG=/etc/opkg-boot.log
-log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
+log() { echo "$(date '+%F %T') $*" >> "$LOG" 2>/dev/null || true; }
+: "${CONF:=/etc/opkg.conf}"
 
-# --- 1) arch ---
-if ! grep -q '^arch aarch64_cortex-a53' /etc/opkg.conf 2>/dev/null; then
-	echo 'arch aarch64_cortex-a53 5' >> /etc/opkg.conf
-	log "已补 arch aarch64_cortex-a53 5"
-fi
+# 文件末尾必须有换行，否则 `echo >>` 会与最后一行合并（历史 bug 的根源）
+ensure_newline() {
+	[ -s "$CONF" ] || { : > "$CONF"; return 0; }
+	[ -n "$(tail -c1 "$CONF")" ] && echo >> "$CONF"
+	return 0
+}
 
-# --- 2) 等网络 + DNS（最多 180 秒） ---
+have_arch() { opkg print-architecture 2>/dev/null | awk '{print $1}' | grep -qx "$1"; }
+
+# 架构段语法校验：任何 `arch 名字 优先级` 行里优先级不是纯数字 => 视为损坏
+archs_ok() {
+	[ -f "$CONF" ] || return 1
+	awk 'BEGIN{bad=0}
+	     /^arch[ 	]/ {
+	         if (NF != 3 || $3 !~ /^[0-9]+$/) bad = 1
+	     }
+	     END { exit bad }' "$CONF" || return 1
+	have_arch aarch64_generic
+}
+
+add_arch() {   # $1=arch $2=priority
+	have_arch "$1" && return 0
+	ensure_newline
+	echo "arch $1 $2" >> "$CONF"
+	log "补 arch $1 $2"
+}
+
+fix_archs() {
+	ensure_newline
+
+	# 先校验：历史 bug 会把 "arch xxx 10" 与后追加内容拼成一行(优先级变成 "10arch"),
+	# 这会让 opkg 认为「所有包架构都不受支持」。整段重建最稳。
+	if ! archs_ok; then
+		log "架构段异常(优先级非数字或缺少主架构), 重建 arch 段"
+		sed -i '/^arch[ \t]/d' "$CONF" 2>/dev/null
+		ensure_newline
+		{
+			echo 'arch all 1'
+			echo 'arch noarch 1'
+			echo 'arch aarch64_generic 10'
+			echo 'arch aarch64_cortex-a53 5'
+		} >> "$CONF"
+	else
+		add_arch all 1
+		add_arch noarch 1
+		add_arch aarch64_generic 10
+		add_arch aarch64_cortex-a53 5
+	fi
+	log "当前架构表: $(opkg print-architecture 2>/dev/null | awk '{printf "%s ", $1}')"
+}
+
+fix_archs
+
+# --- 等网络 + DNS（最多 180 秒） ---
 i=0
 while [ "$i" -lt 36 ]; do
 	if ping -c1 -W2 223.5.5.5 >/dev/null 2>&1 || nslookup openwrt.org >/dev/null 2>&1; then
@@ -27,13 +75,13 @@ while [ "$i" -lt 36 ]; do
 done
 [ "$i" -ge 36 ] && log "网络等待超时，仍尝试 update"
 
-# --- 3) 校时（HTTPS 需要正确时间） ---
+# --- 校时（HTTPS 需要正确时间） ---
 if command -v ntpd >/dev/null 2>&1; then
 	ntpd -n -q -p 223.5.5.5 >/dev/null 2>&1 || true
 	log "校时后时间: $(date '+%F %T')"
 fi
 
-# --- 4) opkg update（重试 3 次） ---
+# --- opkg update（重试 3 次） ---
 n=1
 while [ "$n" -le 3 ]; do
 	if opkg update >>"$LOG" 2>&1; then
@@ -42,9 +90,8 @@ while [ "$n" -le 3 ]; do
 	fi
 	if grep -qiE 'signature|signature check failed' "$LOG" 2>/dev/null; then
 		log "签名校验失败，关闭 check_signature 后重试"
-		uci -q set "opkg.check_signature=0" 2>/dev/null
-		sed -i 's/^option check_signature.*/option check_signature 0/' /etc/opkg.conf 2>/dev/null
-		grep -q '^option check_signature' /etc/opkg.conf || echo 'option check_signature 0' >> /etc/opkg.conf
+		sed -i 's/^option check_signature.*/option check_signature 0/' "$CONF" 2>/dev/null
+		grep -q '^option check_signature' "$CONF" || { ensure_newline; echo 'option check_signature 0' >> "$CONF"; }
 	fi
 	log "opkg update 第 $n 次失败，10 秒后重试"
 	sleep 10
