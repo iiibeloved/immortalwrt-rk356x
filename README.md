@@ -301,6 +301,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 | 小盘设备 | eMMC 剩余 < 58 GiB 时不自动拆盘 → iStore「存储位置」为空，需手动建分区 |
 | NVMe 空白盘 | 默认**不**自动格式化（保护数据）；确需格式化请 `touch /etc/nvme-automount.format` 后重启 |
 | HA 的 HACS（旧插件商店） | HA **2026.11 起内置 Marketplace 取代 HACS**，HACS 安装脚本会自行退出；固件已改为友好提示并跳过（不影响 HA 运行）。用「设置 → Marketplace」 |
+| eMMC 拆盘失败（无 p5/p6、docker 跑到 NVMe） | `parted` 在磁盘占用时可能「rc≠0 但已写表」，旧脚本因此误建 primary p4。已修（以分区表实际状态为准 + 自动纠正 p4）；旧固件手动修复见 build-guide 7.7 |
 | iStore 程序空间 | iStore 应用装在 `/overlay`（4 GiB），**不是**数据盘；装大应用前先看 `df -h /overlay` |
 | 更新列表报 iStoreOS 源 `Signature check failed` | 那三个源的签名 key 未公开，固件已默认注释；商店安装不受影响。详见 [build-guide 附录 H](docs/build-guide.md) |
 | opkg 装包报 `has no valid architecture` | 旧固件首启脚本把 `arch` 行拼接坏了（优先级变成 `10arch`）；修复命令见 [build-guide 附录 G](docs/build-guide.md) |

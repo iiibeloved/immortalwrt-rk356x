@@ -22,7 +22,7 @@
 | `files/etc/config/portled` | `042a03536f46cc1bb367e44d1c31a666277f33c67caec6f61cfc0f3b1d66cab4` |
 | `files/etc/config/ttyd` | `43666e86f2bdbfaf953a3b09bfdbf9960e6e1fff4fcd7cb687d0d257e17433e2` |
 | `files/etc/init.d/docker-dataroot` | `16ee4f4d025eff33a8d3aa195459254ca02b8bddae7ae759a04254b30d5b2108` |
-| `files/etc/init.d/docker-disk` | `1ed52fcd282bf90c1c4cf035e641793fbafe6a91b8c8a38b1fcb58ad5c1eede3` |
+| `files/etc/init.d/docker-disk` | `9583cdb311b3a8d70222b8afaca51a8824fc9ae35e734e9e88d07d8281625d2f` |
 | `files/etc/init.d/ha-config-path` | `a8d3fac1f585dec59a739513bc69e37111649e7fa3abce4e360c603933589ed2` |
 | `files/etc/init.d/nvme-automount` | `5a8417dcb0ad7b4c2dd7fdeb76bbca1970917561b343ce5d787321796d5d6ab3` |
 | `files/etc/init.d/portled` | `12491a12f5acf3572b791da301a1832b8a9e07eb3328854eaeb664b4e503d5d9` |

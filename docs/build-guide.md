@@ -368,7 +368,17 @@ cat /etc/.docker-disk.log ; logread | grep docker-disk           # 日志
 想改 docker 分区容量：改脚本里的 `DOCKER_MIB`（默认 **51200 = 50 GiB**；阈值会自动跟着变 = DOCKER_MIB + 8 GiB），
 或改 `DOCKER_LABEL` / `DATA_LABEL` / 挂载点。
 
-**踩过的坑（2026-11-08 修复）**：ImmortalWrt 里 `/rom` 的挂载源显示为 **`/dev/root`**（squashfs 虚拟设备名），
+**踩过的坑（2026-11-08 二次修复）**：`parted` 在磁盘被占用（rootfs 已挂载）时**可能返回非 0，
+但分区表其实已写入**；旧实现把 rc≠0 当失败，还会退化成 `mkpart primary` —— 结果建出一个
+**primary p4**，之后 `mkpart logical` 必然失败，脚本从此每次开机都失败（表现为「eMMC 没有 p5/p6、docker 跑到 NVMe」）。
+现版本改为**以 `parted print` 的实际状态为准**：
+
+- 校验 p4 类型必须是 `extended`；若是误建的 `primary` 且**无文件系统**，自动删掉重建（有数据则拒绝并报错）；
+- `mk_part()` 每次尝试后回读分区表，按「分区号 + 类型」判定成功，不再依赖 rc；
+- p5 大小用 `parted -m -s unit MiB print` 读，校验 ≥90% × 50 GiB；
+- 分区表就位但内核未识别时，再自动重启一次续跑。
+
+**踩过的坑（2026-11-08 首次修复）**：ImmortalWrt 里 `/rom` 的挂载源显示为 **`/dev/root`**（squashfs 虚拟设备名），
 旧版 `boot_disk()` 直接拿它去 `/sys/class/block/` 查父磁盘 → 查不到 → 脚本静默跳过，表现为「刷完没有 p5/p6、docker 仍在 `/opt/docker`」。
 现版本先 `readlink -f` 解析软链（`/dev/root` → `/dev/mmcblk0p2`），失败再用 `lsblk -no PKNAME` 兜底，并会在日志里明确记录原因。
 已刷旧固件的机器需手动：`parted` 建 p4/p5/p6 → 重启 → `mkfs` + `mount` + `block detect`。

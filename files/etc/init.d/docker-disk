@@ -65,27 +65,39 @@ boot_disk() {
 	return 1
 }
 
-# 建分区: parted 在不同版本对 `mkpart extended/logical` 的解析不一致, 这里按变体依次尝试,
-# 并用 `parted -m print` 校验分区是否真的创建成功、大小是否符合预期。
-parted_try() {   # $1=dev  $2..=参数变体字符串(按顺序尝试)
-	local dev="$1"; shift
-	local args rc
+# 分区表工具: 以 `parted print` 的实际结果为准(parted 在磁盘被占用时可能 rc=1 但已写入表)
+part_table() { parted -s "$1" print 2>/dev/null; }
+
+part_exists() {   # $1=dev $2=分区号
+	part_table "$1" | awk -v n="$2" '$1 == n {f=1} END {exit !f}'
+}
+
+part_type() {     # $1=dev $2=分区号 -> primary/extended/logical/空
+	part_table "$1" | awk -v n="$2" '$1 == n {print $5; exit}'
+}
+
+part_size_mib2() {  # $1=dev $2=分区号 -> 大小(MiB, 机器可读格式)
+	parted -m -s "$1" unit MiB print 2>/dev/null \
+		| awk -F: -v n="$2" '$1 == n {gsub(/MiB$/,"",$4); printf "%d\n", $4+0}'
+}
+
+# 单次尝试建分区, 然后以分区表实际状态判定成功与否(容忍 rc!=0 的 "unable to inform kernel")
+mk_part() {   # $1=dev  $2=期望成为的分区号  $3=期望类型  $4..=参数变体
+	local dev="$1" want_num="$2" want_type="$3"; shift 3
+	local args t
 	for args in "$@"; do
 		# shellcheck disable=SC2086
 		parted -s "$dev" $args >>"$LOG" 2>&1
-		rc=$?
-		[ "$rc" = "0" ] && { log "parted ok: parted -s $dev $args"; return 0; }
-		log "parted 失败(rc=$rc): parted -s $dev $args"
+		part_exists "$dev" "$want_num" || continue
+		t=$(part_type "$dev" "$want_num")
+		if [ -n "$want_type" ] && [ "$t" != "$want_type" ]; then
+			log "分区 $want_num 类型为 $t(期望 $want_type): parted -s $dev $args"
+			continue
+		fi
+		log "分区 $want_num 就绪($t): parted -s $dev $args"
+		return 0
 	done
 	return 1
-}
-
-part_count() {   # 输出 parted -m print 里的最大分区号
-	parted -m -s "$1" unit MiB print 2>/dev/null | awk -F: '/^[0-9]+:/{if ($1+0 > m) m=$1+0} END{print m+0}'
-}
-
-part_size_mib() {   # $1=dev $2=分区号 -> 大小(MiB, 取整)
-	parted -m -s "$1" unit MiB print 2>/dev/null | awk -F: -v n="$2" '$1+0==n {gsub(/MiB$/,"",$4); printf "%d\n", $4+0}'
 }
 
 create_parts() {   # $1=dev  $2=extended 起始 MiB
@@ -93,43 +105,59 @@ create_parts() {   # $1=dev  $2=extended 起始 MiB
 	local p5s=$((base + 1))
 	local p5e=$((p5s + DOCKER_MIB - 1))
 	local p6s=$((p5e + 1))
-	local n sz
+	local t sz
 
 	log "创建分区: extended=$base  p5=$p5s..$p5e  p6=$p6s..end (MiB)"
 
-	# 扩展分区(已存在则跳过)
-	if [ "$(part_count "$dev")" -ge 4 ]; then
-		log "$dev 已有分区 4(扩展), 跳过 extended 创建"
-	else
-		parted_try "$dev" \
+	# --- p4: 必须是 extended; 若是误建的 primary 且为空, 删掉重建 ---
+	if part_exists "$dev" 4; then
+		t=$(part_type "$dev" 4)
+		if [ "$t" = "extended" ]; then
+			log "$dev 的 p4 已是扩展分区, 复用"
+		else
+			if [ -n "$(blkid -s TYPE -o value "$DEVDIR/${DISK}p4" 2>/dev/null)" ]; then
+				log "p4 是 $t 且已有文件系统, 拒绝删除, 放弃(请手动处理)"
+				return 1
+			fi
+			log "p4 是 $t(非扩展)且为空, 删除后重建为扩展分区"
+			parted -s "$dev" rm 4 >>"$LOG" 2>&1 || true
+			part_exists "$dev" 4 && { log "删除 p4 失败, 放弃"; return 1; }
+		fi
+	fi
+
+	# --- 扩展分区 ---
+	if ! part_exists "$dev" 4; then
+		mk_part "$dev" 4 extended \
 			"unit MiB mkpart extended $base 100%" \
-			"unit MiB mkpart primary $base 100%" \
+			"-a none unit MiB mkpart extended $base 100%" \
+			"unit MiB mkpart extended ${base}MiB 100%" \
 			|| { log "创建扩展分区失败, 放弃"; return 1; }
 	fi
 
-	# p5(50 GiB docker)
-	if [ ! -e "$BLOCKDIR/${DISK}p5" ]; then
-		parted_try "$dev" \
+	# --- p5 / p6 (MBR 逻辑分区从 5 开始) ---
+	if ! part_exists "$dev" 5; then
+		mk_part "$dev" 5 logical \
 			"unit MiB mkpart logical ext4 $p5s $p5e" \
 			"unit MiB mkpart logical $p5s $p5e" \
 			"-a none unit MiB mkpart logical ext4 $p5s $p5e" \
 			|| { log "创建 p5 失败, 放弃"; return 1; }
 	fi
-	# p6(其余)
-	if [ ! -e "$BLOCKDIR/${DISK}p6" ]; then
-		parted_try "$dev" \
+	if ! part_exists "$dev" 6; then
+		mk_part "$dev" 6 logical \
 			"unit MiB mkpart logical ext4 $p6s 100%" \
 			"unit MiB mkpart logical $p6s 100%" \
 			"-a none unit MiB mkpart logical ext4 $p6s 100%" \
 			|| { log "创建 p6 失败, 放弃"; return 1; }
 	fi
 
-	# 校验: 必须有 5/6 号分区, 且 p5 大小≈DOCKER_MIB
-	n=$(part_count "$dev"); sz=$(part_size_mib "$dev" 5)
-	log "校验: 最大分区号=$n, p5 大小=${sz}MiB (期望 ${DOCKER_MIB}MiB)"
-	[ "${n:-0}" -ge 6 ] || { log "分区数不足(需要 6), 放弃"; return 1; }
+	# --- 结果校验 ---
+	sz=$(part_size_mib2 "$dev" 5)
+	log "校验: p4=$(part_type "$dev" 4) p5=$(part_size_mib2 "$dev" 5)MiB p6=$(part_size_mib2 "$dev" 6)MiB"
+	[ "$(part_type "$dev" 4)" = "extended" ] || { log "p4 不是扩展分区, 放弃"; return 1; }
+	[ "$(part_type "$dev" 5)" = "logical" ] || { log "p5 缺失/类型异常, 放弃"; return 1; }
+	[ "$(part_type "$dev" 6)" = "logical" ] || { log "p6 缺失/类型异常, 放弃"; return 1; }
 	if [ "${sz:-0}" -gt 0 ] && [ "$sz" -lt $((DOCKER_MIB * 90 / 100)) ]; then
-		log "p5 大小异常(${sz}MiB), 放弃自动处理"; return 1
+		log "p5 大小异常(${sz}MiB), 放弃"; return 1
 	fi
 	return 0
 }
@@ -274,7 +302,10 @@ start() {
 	if [ "$DRYRUN" = "1" ]; then
 		log "[dryrun] create_parts $DEVDIR/$DISK $start_mib  (extended + logical ${start_mib}..100%)"
 	else
-		create_parts "$DEVDIR/$DISK" "$start_mib" || { log "分区创建失败, 放弃"; return 0; }
+		if ! create_parts "$DEVDIR/$DISK" "$start_mib"; then
+			log "分区创建失败(详见上方 parted 输出), 放弃自动处理; 可参考 docs/build-guide.md 手动建盘"
+			return 0
+		fi
 	fi
 
 	# 在线改分区表后内核通常不会立刻生成新分区节点(mknod 出来的节点无法 mkfs/mount),
