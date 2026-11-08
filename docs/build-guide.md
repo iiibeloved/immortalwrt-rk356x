@@ -495,35 +495,21 @@ netstat -lntp | grep 7681        # 应看到 0.0.0.0:7681（而不是旧的 LAN 
 **安全提醒**：监听 `0.0.0.0` 只代表「不受网卡 IP 变化影响」，WAN 侧仍由防火墙默认策略拦截（没有放行 7681 的规则）；
 不要把 7681 加到 WAN 区域，也不要用 root 空密码。
 
-### 7.11 指示灯（电源灯）开关
+### 7.11 指示灯（电源灯常亮 / 网口灯不可控）
 
 查过 `rk3568-nsy-g68-plus.dts` 与内核驱动后确认这台机器的灯分两类：
 
-| 灯 | 由谁控制 | 软件能否开关 |
+| 灯 | 由谁控制 | 软件能否控制 |
 | --- | --- | --- |
-| 前面板电源灯 `led-power`（GPIO0_C4） | 内核 `gpio-leds` → `/sys/class/leds/led-power` | ✅ 能 |
-| RJ45 网口灯 | **Realtek RTL8367S 交换芯片内部逻辑**（按链路/速率/活动自动驱动） | ❌ 不能 |
+| 前面板电源灯 `led-power`（GPIO0_C4） | 内核 `gpio-leds` → `/sys/class/leds/led-power` | ✅ 可置常亮 |
+| RJ45 网口灯 | **Realtek RTL8367S 交换芯片内部逻辑** | ❌ 驱动未暴露 LED 属性 |
 
-网口灯不可控的原因：`rtl8367b` 驱动只暴露 `enable_vlan / enable_vlan4k / reset_mibs / max_length / reset_mib / mib / info`，
-没有任何 LED 属性（驱动里只有 `0x1b0e~0x1b10` 三个「LED 极性」寄存器，改的是高低电平有效，不是开关）。
-**该需求已确认放弃**，不再做驱动改造；确实嫌灯亮时，用物理遮挡，或对长期不用的口
-`swconfig dev switch0 port <n> set enable 0`（该口会同时断网）。
+**结论（2026-11-08 定稿）**：
 
-内置 `/etc/config/portled` + `/etc/init.d/portled`（START=70）用于控制 GPIO 灯：
-
-```sh
-# 关闭电源灯等所有可控 GPIO 灯
-uci set portled.main.enable=0
-uci commit portled
-/etc/init.d/portled restart
-
-# 只关电源灯
-uci set portled.main.power_led=0 && uci commit portled && /etc/init.d/portled restart
-
-# 恢复
-uci set portled.main.enable=1 && uci set portled.main.power_led=1
-uci commit portled && /etc/init.d/portled restart
-```
+1. **电源灯固定常亮**。关闭它没有实际意义（不省电、不影响功能），因此**不再提供关闭开关**；
+   `/etc/init.d/portled`（START=70）每次开机把 `/sys/class/leds/*` 的 `trigger` 置为 `default-on`、`brightness` 置 1；
+2. **网口灯软件不可控**（`rtl8367b` 驱动只有 `enable_vlan/reset_mib/mib/info` 等属性，LED 相关寄存器仅控极性），
+   该需求已放弃；确实嫌亮就用物理遮挡，或对长期不用的口 `swconfig dev switch0 port <n> set enable 0`（该口会断网）。
 
 日志：`/etc/portled.log`、`logread | grep portled`。
 

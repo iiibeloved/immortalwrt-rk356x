@@ -1,42 +1,31 @@
 #!/bin/sh /etc/rc.common
-# 按 /etc/config/portled 应用指示灯状态(GPIO 灯)。
-# RJ45 网口灯由 RTL8367S 硬件驱动, 软件无法控制, 本脚本不涉及。
+# 确保前面板电源灯(led-power)常亮。
+# 说明: 关闭电源灯没有实际意义(不省电/无功能收益), 故不再提供关闭开关。
+#       RJ45 网口灯由 RTL8367S 硬件驱动, 软件不可控, 本脚本不涉及。
 
 START=70
 STOP=10
 
 : "${LOG:=/etc/portled.log}"
-log() { echo "$(date '+%F %T') $*" >> "$LOG"; logger -t portled "$*" 2>/dev/null; }
-
-apply_gpio() {   # $1=0 关闭  $2=1 点亮
-	local state="$1" leds led name
-	leds=$(ls -d /sys/class/leds/* 2>/dev/null)
-	[ -n "$leds" ] || { log "没有 /sys/class/leds 设备"; return 0; }
-	for led in $leds; do
-		name=$(basename "$led")
-		if [ "$state" = "0" ]; then
-			echo none > "$led/trigger" 2>/dev/null
-			echo 0 > "$led/brightness" 2>/dev/null
-		else
-			echo default-on > "$led/trigger" 2>/dev/null
-			echo 1 > "$led/brightness" 2>/dev/null
-		fi
-	done
-	log "GPIO 灯已设置为 $([ "$state" = "0" ] && echo 关闭 || echo 点亮)"
-}
+log() { echo "$(date '+%F %T') $*" >> "$LOG" 2>/dev/null; logger -t portled "$*" 2>/dev/null; }
 
 start() {
-	local enable=1 power=1
-	. /lib/functions.sh
-	config_load portled
-	config_get_bool enable main enable 1
-	config_get_bool power main power_led 1
+	local leds led name n=0
+	leds=$(ls -d /sys/class/leds/* 2>/dev/null)
+	[ -n "$leds" ] || { log "没有 /sys/class/leds 设备"; return 0; }
 
-	if [ "$enable" = "0" ] || [ "$power" = "0" ]; then
-		apply_gpio 0
-	else
-		apply_gpio 1
-	fi
+	for led in $leds; do
+		name=$(basename "$led")
+		# 只处理 GPIO 灯(电源灯等); 网口灯不在 /sys/class/leds 里
+		if echo default-on > "$led/trigger" 2>/dev/null; then
+			echo 1 > "$led/brightness" 2>/dev/null
+			n=$((n + 1))
+			log "已置常亮: $name"
+		else
+			log "跳过 $name (trigger 不可写)"
+		fi
+	done
+	[ "$n" -gt 0 ] && log "共设置 $n 个灯为常亮" || log "未找到可设置的灯"
 }
 
 stop() { :; }
