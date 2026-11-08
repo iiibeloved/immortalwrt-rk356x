@@ -1,22 +1,54 @@
 #!/bin/sh
-# 首次启动: 让 opkg 能吃 iStoreOS 的 aarch64_cortex-a53 包, 并预热索引。
-# 若 iStore 源签名校验失败(官方公钥未公开), 自动关闭签名校验并重试一次。
-# 日志: /etc/opkg-boot.log
+# =============================================================================
+#  首次启动准备 opkg：
+#    1) 补 arch（iStoreOS 的 nas 源是 aarch64_cortex-a53）
+#    2) 等网络/DNS 就绪、必要时先校时（RK3568 无电池 RTC，时间不对会让 HTTPS 失败）
+#    3) opkg update 带重试；只在签名确实失败时才关闭签名校验
+#  日志：/etc/opkg-boot.log
+# =============================================================================
 LOG=/etc/opkg-boot.log
+log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
 
-# 1) 架构兼容: nas 源是 cortex-a53 编译, 与本机 aarch64_generic 二进制兼容
-grep -q '^arch aarch64_cortex-a53 ' /etc/opkg.conf 2>/dev/null || \
+# --- 1) arch ---
+if ! grep -q '^arch aarch64_cortex-a53' /etc/opkg.conf 2>/dev/null; then
 	echo 'arch aarch64_cortex-a53 5' >> /etc/opkg.conf
+	log "已补 arch aarch64_cortex-a53 5"
+fi
 
-# 2) 后台预热(等网络起来; 失败不影响开机)
-(
-	sleep 25
-	timeout 120 opkg update >"$LOG" 2>&1
-	if grep -qi 'Signature check failed' "$LOG"; then
-		grep -q '^option check_signature 0' /etc/opkg.conf 2>/dev/null || \
-			echo 'option check_signature 0' >> /etc/opkg.conf
-		timeout 180 opkg update >>"$LOG" 2>&1
+# --- 2) 等网络 + DNS（最多 180 秒） ---
+i=0
+while [ "$i" -lt 36 ]; do
+	if ping -c1 -W2 223.5.5.5 >/dev/null 2>&1 || nslookup openwrt.org >/dev/null 2>&1; then
+		log "网络就绪（第 $((i*5)) 秒）"
+		break
 	fi
-) &
+	sleep 5
+	i=$((i + 1))
+done
+[ "$i" -ge 36 ] && log "网络等待超时，仍尝试 update"
 
+# --- 3) 校时（HTTPS 需要正确时间） ---
+if command -v ntpd >/dev/null 2>&1; then
+	ntpd -n -q -p 223.5.5.5 >/dev/null 2>&1 || true
+	log "校时后时间: $(date '+%F %T')"
+fi
+
+# --- 4) opkg update（重试 3 次） ---
+n=1
+while [ "$n" -le 3 ]; do
+	if opkg update >>"$LOG" 2>&1; then
+		log "opkg update 成功（第 $n 次）"
+		exit 0
+	fi
+	if grep -qiE 'signature|signature check failed' "$LOG" 2>/dev/null; then
+		log "签名校验失败，关闭 check_signature 后重试"
+		uci -q set "opkg.check_signature=0" 2>/dev/null
+		sed -i 's/^option check_signature.*/option check_signature 0/' /etc/opkg.conf 2>/dev/null
+		grep -q '^option check_signature' /etc/opkg.conf || echo 'option check_signature 0' >> /etc/opkg.conf
+	fi
+	log "opkg update 第 $n 次失败，10 秒后重试"
+	sleep 10
+	n=$((n + 1))
+done
+log "opkg update 连续失败，详见 $LOG"
 exit 0

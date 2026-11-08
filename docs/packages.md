@@ -10,7 +10,7 @@
 
 | 文件 | sha256 |
 | --- | --- |
-| `defconfig/g68-plus-istoreos.config` | `908855b1d006c80b759e9645068539e8ce265017c02d65cd008310201bc01b4e` |
+| `defconfig/g68-plus-istoreos.config` | `18deb5cfc06d4556477bdf5d76d2ee2a305783b0710da895741a35f7cd233d0a` |
 | `.github/workflows/build-g68-plus-docker.yml` | `fbee12124d69d9b51fb6a6279360f1a9440133720de7f0bbe2bf5f01280bcd21` |
 | `scripts/gen_image_generic.sh` | `f6d59494a9c88f5fe4e2175f00067eb5b5160a32b903b0a16f726a7b99903e98` |
 | 固件镜像 `*.img.gz` | `d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f` |
@@ -30,7 +30,7 @@
 | `files/etc/uci-defaults/98-enable-custom-initd` | `3700abd9fc5ce141bd643a43703a831a25946ec4720307521f8ad978d2384a7f` |
 | `files/etc/uci-defaults/98-fix-ttyd` | `3ea3fc0ba31c8f2efa3bf43422589a695bc5d713d3f78a144581986e0acc0f59` |
 | `files/etc/uci-defaults/98-portled` | `91975c4b61ab5b3545f4e0698600c744497cf03496c814860bf8ffb643616a15` |
-| `files/etc/uci-defaults/99-opkg-istore` | `d6004e6311752baa9c49467f68ac3f1b7edf859bcee8679c6441fa9ed3f9ffc6` |
+| `files/etc/uci-defaults/99-opkg-istore` | `747db84c14abe526ace5d9b5758e2aff79f539351497729a4b8eb8f7171c26a8` |
 | `files/etc/uci-defaults/99-set-lan-ip` | `f48add100eb91cd175351357022cf76dbb4a68318471e2695cb98eca333208cd` |
 
 > 完整基线清单见 [`baseline.sha256`](baseline.sha256)，校验：`sha256sum -c docs/baseline.sha256`。
