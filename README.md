@@ -37,7 +37,6 @@
 | DHCP 池 | `192.168.100.100 – 192.168.100.249`（`dhcp.lan.start=100 / limit=150`，随网段自动偏移） |
 | 默认时区 | `Asia/Shanghai`（`CST-8`） |
 | 内置终端 | LuCI → 系统 → **TTYD 终端**（`ttyd` 监听 `0.0.0.0:7681`，不绑定网卡，改 IP 不掉线） |
-| 电源灯指示 | **快速闪烁 = 正在初始化**（挂载/一次性脚本/opkg）；**常亮 = 就绪**；不亮 = 未启动（见 build-guide 7.11） |
 | 应用商店 | LuCI → **iStore**（「存储位置」下拉来自已挂载的盘，选中即可；固件不预设） |
 
 > 改地址：`uci set network.lan.ipaddr=192.168.100.1 && uci commit network && /etc/init.d/network reload`
@@ -58,7 +57,6 @@
 | NVMe 自动检测挂载 → `/mnt/nvme0`（**只挂载、不格式化**，保留盘内数据） | `nvme-automount` | 常驻 | 已挂载跳过；fstab 按 UUID 去重；空白盘只记日志 |
 | TTYD 去掉 `@lan` 绑定（改 IP 不再「已拒绝连接」） | `98-fix-ttyd` + `files/etc/config/ttyd` | 一次性 | 无 `interface` 才改 |
 | 补 opkg arch、必要时关签名校验 | `99-opkg-istore` | 一次性 | 已有 arch 行则不重复 |
-| 电源灯兼作进度指示（快闪=初始化中 / 常亮=就绪） | `bootled` | 常驻 | 由 `firstboot-status` 同源判据决定何时置常亮 |
 
 **磁盘布局**（256 GB eMMC，镜像占约 4.3 GiB）：
 
@@ -254,7 +252,7 @@ cat bin/targets/rockchip/armv8/sha256sums
 > **首次开机操作要点**：LAN 接电脑、WAN 接上级路由（默认 DHCP，免设置）；通电后等 **1–2 分钟**即可访问
 > `http://192.168.100.1`（本版**不会**自动重启、也不会自动分区/格式化）。
 > 需要 docker 数据盘时再按 [build-guide 7.6](docs/build-guide.md) 手动划一次分区。
-> **判定初始化完成**：电源灯**常亮**，或 `firstboot-status` 全绿（判据：`/etc/uci-defaults/` 已清空 + 无 `mkfs`/初始化进程）。
+> **判定初始化完成**：`firstboot-status` 全绿（判据：`/etc/uci-defaults/` 已清空 + 无初始化进程），或 `ls /etc/uci-defaults/` 为空 + 无 `mkfs` 进程。
 > 下一版固件起可直接运行 `firstboot-status` 一键自检。详见 [build-guide 附录 I](docs/build-guide.md)。
 
 最新基线：**Release [`g68-plus-2026.11.08`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08)** · 167.1 MB · sha256 `d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f`
@@ -329,7 +327,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 | 项 | 说明 |
 | --- | --- |
 | `mergerfs` | ImmortalWrt 24.10 与 small-package 均无此包，未集成（可用 diskman + 多挂载点替代） |
-| RJ45 网口灯 | 由 RTL8367S 交换芯片硬件驱动，`rtl8367b` 驱动未暴露 LED 属性，**软件无法开关**（电源灯由 `bootled` 控制） |
+| RJ45 网口灯 | 由 RTL8367S 交换芯片硬件驱动，`rtl8367b` 驱动未暴露 LED 属性，**软件无法开关**（电源灯默认常亮，由 DTS `default-state` 决定） |
 | 小盘设备 | eMMC 剩余 < 58 GiB 时不自动拆盘 → iStore「存储位置」为空，需手动建分区 |
 | NVMe 空白盘 | 默认**不**自动格式化（保护数据）；确需格式化请 `touch /etc/nvme-automount.format` 后重启 |
 | HA 的 HACS（旧插件商店） | HA **2026.11 起内置 Marketplace 取代 HACS**，HACS 安装脚本会自行退出；固件已改为友好提示并跳过（不影响 HA 运行）。用「设置 → Marketplace」 |
