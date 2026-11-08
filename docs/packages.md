@@ -2,8 +2,8 @@
 
 > 由构建产物 `immortalwrt-rockchip-armv8-nsy_g68-plus.manifest` 直接生成，非手写。
 
-- **当前产物**：run [#42434898000](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42434898000) · Release [`g68-plus-2026.11.08-r23`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08-r23) · **556 个包**（含 DDNS 6 包）
-- **镜像 sha256**：`ecac5ee2e95c52c7210e28b54109c6b1d50e829b8653859a6be7fd8d0cbc2eb5`
+- **当前产物**：run [#42464195953](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42464195953) · Release [`g68-plus-2026.11.08-r25`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08-r25) · **556 个包**（含 DDNS）
+- **镜像 sha256**：`f41162a3a8c374c09fe1f2300a3d3c1b359be905b8e1e120a34ebedeca34d462`
 - 与上一版（549 包）差异：**+`kmod-fs-f2fs`、+`kmod-fs-xfs`、+`kmod-crypto-crc32`**（NTFS3 自 r12 起已内置）
 
 ## 基线指纹
