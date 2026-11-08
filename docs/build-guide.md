@@ -832,3 +832,78 @@ opkg update
 > 但「软件包」里看不到 iStoreOS 的包（商店安装不受影响）。
 
 （不影响已安装的 iStore 与商店安装应用。）
+
+
+## 附录 I. 首次刷机操作指引（含「首启自动重启」）
+
+刷完新固件**第一次开机**，固件会做一串初始化，其中可能**自动重启一次**（分区表写入后内核未即时识别时的兜底）。
+按下面顺序操作最省事，也最不容易误判成「卡死 / 刷坏」。
+
+### 一、刷机前（30 秒）
+
+| 动作 | 说明 |
+| --- | --- |
+| **LAN 口接电脑**（或交换机） | 默认地址 `192.168.100.1`，DHCP 池 `192.168.100.100–249` |
+| **WAN 口接光猫 / 上级路由** | 首启的 `opkg update`、NTP 校时需要外网；**不接也能用**，只是软件包列表要登录后手动点一次「更新列表」 |
+| 不用插 NVMe / USB | 插了也行，`nvme-automount` 只挂载、不格式化，不会动盘内数据 |
+
+### 二、第一次开机：什么都不做，等它自己重启
+
+- 通电后**不要登录、不要断电**（此时后台可能在写分区表）；
+- 约 **1–3 分钟**内会自动重启一次，日志特征（登录后可在 `/etc/.docker-disk.log` 看到）：
+
+```
+内核尚未识别新分区, 写入重启标记并重启(下次开机继续格式化)
+```
+
+- 这次重启是**预期行为**，SSH/LuCI 会断开，属正常。
+
+### 三、第二次开机：继续等 2–5 分钟
+
+后台在做（顺序执行）：
+
+1. `mkfs.ext4` 格式化 `p5`（50 GiB，约 10–30 秒）
+2. `mkfs.ext4` 格式化 `p6`（其余，约 30–60 秒）
+3. 挂载 `/mnt/ext_relay`、`/mnt/data`，写 fstab（按 UUID）
+4. `dockerd.globals.data_root=/mnt/ext_relay/docker`
+5. `ha-config-path` 生成 `/mnt/data/Configs/HomeAssistant`（+`custom_components`）
+6. `99-opkg-istore`：等网络 → NTP 校时 → `opkg update`（最多 3 次重试）
+
+**这段时间不要断电**（正在格式化）。
+
+### 四、5 分钟后登录并验证
+
+```
+浏览器: http://192.168.100.1    用户名 root / 密码空（首登请立刻设置）
+```
+
+```sh
+parted -s /dev/mmcblk0 print | tail -4        # 期望 4 extended / 5 约 50G / 6 其余
+df -h /mnt/ext_relay /mnt/data
+docker info | grep -i 'docker root dir'       # 期望 /mnt/ext_relay/docker
+ls /etc/rc.d/ | grep -E 'docker|nvme|ha-config'
+cat /etc/.docker-disk.log                     # 拆盘全过程
+cat /etc/opkg-boot.log | tail -5              # opkg 初始化结果
+```
+
+### 五、如果 10 分钟后仍没有 p5/p6
+
+按顺序看两处日志，按报错对照 [7.7 节](#77-首次启动自动拆分剩余空间256g-emmc-场景) 的坑位表：
+
+```sh
+cat /etc/.docker-disk.log
+parted -s /dev/mmcblk0 print
+ls -l /etc/.docker-disk.*     # .done 表示已完成; .rebooted 表示已重启过一次
+```
+
+手动兜底命令见 7.7 / 附录 G（`parted` 建 extended + 两次 `mkpart logical` → 重启 → `mkfs` → `mount` → `block detect`）。
+
+### 六、常见疑问
+
+| 疑问 | 回答 |
+| --- | --- |
+| 首启不插网线可以吗？ | 可以。拆盘/挂载/docker 都不需要网络；只有 `opkg update` 与 NTP 会失败（日志记录），登录后手动点一次「软件包 → 刷新」即可 |
+| 必须先插 WAN 再开机吗？ | 不必，但**先插好**能让首启的 opkg/NTP 一次成功，省去手动刷新 |
+| 自动重启会丢配置吗？ | 不会。它发生在初始化早期、还没做任何用户配置 |
+| 可以在自动重启期间登录改设置吗？ | 不建议。等第二次开机后 5 分钟再操作 |
+| 断电会怎样？ | 分区表已写则无害；**格式化进行中断电**可能留下不完整分区，脚本下次开机检测到「已有分区但无文件系统」会重新格式化（幂等） |

@@ -237,6 +237,10 @@ cat bin/targets/rockchip/armv8/sha256sums
 
 ## 7. 下载与刷机
 
+> **首次开机操作要点**：LAN 接电脑、WAN 接上级（可选但推荐）；通电后**不要登录、不要断电**，
+> 固件会在 1–3 分钟内**自动重启一次**（正常）；第二次开机后再等 2–5 分钟（后台格式化 50 GiB `ext_relay` + `Data`），
+> 然后访问 `http://192.168.100.1`。完整分步与验证命令见 [build-guide 附录 I](docs/build-guide.md)。
+
 最新基线：**Release [`g68-plus-2026.11.08`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08)** · 167.1 MB · sha256 `d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f`
 
 ```bash
