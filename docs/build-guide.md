@@ -693,6 +693,12 @@ rm -f /etc/.docker-disk.done /etc/.docker-disk.rebooted   # 允许 docker-disk �
 | `mmcblk0p6` | 其余 | `/mnt/data` | 共享盘 + **iStore 应用数据**（向导「存储位置」选它） |
 | NVMe | — | `/mnt/nvme0` | 只挂载，内容不动 |
 
+**Home Assistant 配置目录**：`/etc/init.d/ha-config-path`（START=75，每次开机轻量校验）按
+`/mnt/data` → `/mnt/ext_relay` → `/mnt/nvme*` → 其它 `/mnt` 块挂载 选一个 ≥1 GiB 空闲的盘，
+创建 `<base>/Configs/HomeAssistant/custom_components` 并写 `uci homeassistant.@homeassistant[0].config_path`。
+路径命名与 LuCI 下拉选项一致（`<挂载点>/Configs/HomeAssistant`），所以页面会回显已选中；HACS 装进 `/config/custom_components` 即正常。
+日志：`/etc/ha-config.log`。
+
 **怎么确认**
 
 ```sh

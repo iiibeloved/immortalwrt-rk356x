@@ -1,0 +1,98 @@
+#!/bin/sh /etc/rc.common
+# =============================================================================
+#  自动为 luci-app-homeassistant 选择「配置路径」(config_path)
+#
+#  为什么要这个脚本:
+#    HA 应用把 uci homeassistant.@homeassistant[0].config_path 挂进容器 /config。
+#    该值默认为空, 或指向一个不存在的目录 -> docker -v 会创建空目录,
+#    HACS 安装脚本写 custom_components 失败 / 装到错误位置。
+#    LuCI 页面的下拉选项来自 `lsblk -s -f -b`, 形如 <挂载点>/Configs/HomeAssistant,
+#    所以这里选的路径也遵循同一命名, 保证下拉能正确回显。
+#
+#  规则:
+#    1) 已有 config_path 且目录可用 -> 不动(尊重用户选择);
+#    2) 否则优先 /mnt/data(共享盘) -> /mnt/ext_relay(docker 盘) -> /mnt/nvme* -> 其它 /mnt 块挂载;
+#    3) 都不可用则退回 /overlay。
+#  日志: /etc/ha-config.log
+# =============================================================================
+
+START=75          # docker-disk(58) / docker-dataroot(60) / nvme(62) 之后, dockerd(99) 之前
+STOP=10
+
+: "${MOUNTS:=/proc/mounts}"
+: "${LOG:=/etc/ha-config.log}"
+: "${PENDING_DIR:=/etc/ha-pending}"   # 便于测试覆盖
+DRYRUN="${HA_DRYRUN:-0}"
+
+log() { echo "$(date '+%F %T') $*" >> "$LOG" 2>/dev/null; logger -t ha-config "$*" 2>/dev/null; }
+
+mib_free() {   # $1=mountpoint -> MiB
+	local kb
+	kb=$(df -Pk "$1" 2>/dev/null | awk 'NR==2 {print $4}')
+	[ -n "$kb" ] && echo $((kb / 1024)) || echo 0
+}
+
+is_block_mount() {  # $1=mountpoint $2=fstype
+	case "$2" in
+		ext4|xfs|btrfs|f2fs|vfat|exfat|ntfs3) return 0 ;;
+	esac
+	return 1
+}
+
+pick_base() {
+	local mp fs best="" best_free=0 free
+	# 1) 优先固定目标
+	for mp in /mnt/data /mnt/ext_relay; do
+		fs=$(awk -v m="$mp" '$2 == m {print $3; exit}' "$MOUNTS")
+		[ -n "$fs" ] || continue
+		is_block_mount "$mp" "$fs" || continue
+		free=$(mib_free "$mp")
+		[ "$free" -ge 1024 ] && { echo "$mp"; return 0; }
+	done
+	# 2) 其它 /mnt/* 块挂载(含 NVMe), 取剩余空间最大者
+	for mp in $(awk '$2 ~ /^\/mnt\// {print $2}' "$MOUNTS"); do
+		fs=$(awk -v m="$mp" '$2 == m {print $3; exit}' "$MOUNTS")
+		is_block_mount "$mp" "$fs" || continue
+		free=$(mib_free "$mp")
+		[ "$free" -ge 1024 ] || continue
+		if [ "$free" -gt "$best_free" ]; then best="$mp"; best_free="$free"; fi
+	done
+	[ -n "$best" ] && { echo "$best"; return 0; }
+	# 3) 兜底
+	echo "/overlay"
+}
+
+start() {
+	command -v uci >/dev/null 2>&1 || { log "无 uci, 跳过"; return 0; }
+	# 应用尚未安装时也可先写入, 安装时即生效(uci 段由 conffiles 提供)
+
+	local cur base target tz
+	cur=$(uci -q get homeassistant.@homeassistant[0].config_path 2>/dev/null)
+	if [ -n "$cur" ] && [ -d "$cur" ] && [ "$(mib_free "$cur")" -ge 64 ]; then
+		log "已有可用 config_path: $cur (剩余 $(mib_free "$cur") MiB), 保持"
+		target="$cur"
+	else
+		base=$(pick_base)
+		target="$base/Configs/HomeAssistant"
+		log "选定 base=$base -> config_path=$target (剩余 $(mib_free "$base") MiB)"
+	fi
+
+	if [ "$DRYRUN" = "1" ]; then
+		log "[dryrun] mkdir -p $target/custom_components ; uci set config_path=$target"
+		return 0
+	fi
+
+	mkdir -p "$target/custom_components" 2>/dev/null || { log "创建 $target 失败"; return 0; }
+	chmod 755 "$target" "$target/custom_components" 2>/dev/null
+
+	uci -q set "homeassistant.@homeassistant[0].config_path=$target" 2>/dev/null
+	tz=$(uci -q get system.@system[0].zonename 2>/dev/null)
+	[ -n "$tz" ] || tz="Asia/Shanghai"
+	if [ -z "$(uci -q get homeassistant.@homeassistant[0].time_zone 2>/dev/null)" ]; then
+		uci -q set "homeassistant.@homeassistant[0].time_zone=$tz" 2>/dev/null
+	fi
+	uci -q commit homeassistant 2>/dev/null
+	log "已写入 config_path=$target, time_zone=$(uci -q get homeassistant.@homeassistant[0].time_zone 2>/dev/null)"
+}
+
+stop() { :; }

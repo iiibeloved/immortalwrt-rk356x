@@ -92,6 +92,7 @@ p4 extended ── p5 ext4 ext_relay  50 GiB  → /mnt/ext_relay   (docker 数�
 | **iStore 应用（程序本体）** | **`/overlay`（p3，4096 MiB）** | iStore 通过 `opkg` 安装，`opkg` 的 `dest root /` 就是 overlay；商城里的「存储位置」**不会**把程序装到数据盘 |
 | iStore 应用**数据**（部分带向导的应用） | 你在「存储位置」里选的那块盘，建议 **`/mnt/data`** | 选择结果写入 `uci get istore.istore.last_path`，仅用于应用数据目录 |
 | 共享文件 / 下载 | `/mnt/data`（p6） | samba4、NFS、filemanager 的共享根建议指向这里 |
+| **Home Assistant 配置目录** | **`/mnt/data/Configs/HomeAssistant`**（自动选盘，见下） | 由 `ha-config-path` 首启写入 `homeassistant.@homeassistant[0].config_path`，挂进容器 `/config` |
 
 **确认当前落盘**
 
@@ -110,6 +111,11 @@ uci set dockerd.globals.data_root='/mnt/data/docker'
 uci commit dockerd && /etc/init.d/dockerd restart
 docker info | grep -i 'docker root dir'
 ```
+
+**Home Assistant 的配置路径是自动填好的**：首启脚本 `ha-config-path` 按
+`/mnt/data` → `/mnt/ext_relay` → `/mnt/nvme*` → 其它 `/mnt` 块挂载 的顺序选一个（要求 ≥1 GiB 空闲），
+在其下创建 `Configs/HomeAssistant/custom_components` 并写入 uci，因此 HA 应用页面里的「配置路径」下拉
+**默认就有选中项**，HACS 所需的 `custom_components` 目录也提前存在。想自己改：在页面下拉里选别的路径后再点安装/升级即可（脚本只在当前值无效时才覆写）。
 
 > 如果 `docker info` 显示 `Docker Root Dir: /opt/docker`，说明拆盘脚本还没成功跑过（此时 docker 实际占用的是 overlay 的 4 GiB，很容易满）。
 > 如果 iStore 安装时报「空间不足」，那是 `/overlay`（4 GiB）满了，不是数据盘满了 —— 用 `df -h /overlay` 确认。

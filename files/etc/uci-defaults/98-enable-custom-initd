@@ -9,21 +9,21 @@
 LOG=/etc/custom-initd.log
 log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
 
-for s in docker-disk docker-dataroot nvme-automount; do
+for s in docker-disk docker-dataroot nvme-automount ha-config-path; do
 	[ -x "/etc/init.d/$s" ] || { log "缺少 /etc/init.d/$s"; continue; }
 	/etc/init.d/"$s" enable >/dev/null 2>&1 && log "已 enable $s" || log "enable $s 失败"
 done
-ls -l /etc/rc.d/ 2>/dev/null | grep -E 'docker-(disk|dataroot)|nvme-automount' >> "$LOG" 2>&1
+ls -l /etc/rc.d/ 2>/dev/null | grep -E 'docker-(disk|dataroot)|nvme-automount|ha-config-path' >> "$LOG" 2>&1
 
 # 首次启动立即执行一遍(不用等重启)。放后台, 避免格式化 250 GiB 分区拖慢开机。
 (
 	sleep 5
-	for s in docker-disk nvme-automount; do
+	for s in docker-disk nvme-automount ha-config-path; do
 		[ -x "/etc/init.d/$s" ] || continue
 		log "首次执行 $s"
 		/etc/init.d/"$s" start >> "$LOG" 2>&1
 	done
-	# docker-dataroot 依赖外挂盘, 再等一会儿
+	# docker-dataroot / HA 配置路径依赖外挂盘, 再等一会儿
 	sleep 15
 	[ -x /etc/init.d/docker-dataroot ] && /etc/init.d/docker-dataroot start >> "$LOG" 2>&1
 	sync
