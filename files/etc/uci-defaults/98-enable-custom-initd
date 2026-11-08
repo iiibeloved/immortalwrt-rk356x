@@ -1,6 +1,6 @@
 #!/bin/sh
 # =============================================================================
-#  启用并首次执行内置的三个 init 脚本。
+#  启用并首次执行内置的 init 脚本（bootled / nvme-automount / ha-config-path）。
 #
 #  背景: 仅把脚本放进 /etc/init.d/ 不会开机自启, 必须在 /etc/rc.d/ 下创建
 #        S<优先级><名字> 符号链接(即 `init.d 脚本 enable`)。本文件在首次启动时
@@ -13,7 +13,7 @@ for s in bootled nvme-automount ha-config-path; do
 	[ -x "/etc/init.d/$s" ] || { log "缺少 /etc/init.d/$s"; continue; }
 	/etc/init.d/"$s" enable >/dev/null 2>&1 && log "已 enable $s" || log "enable $s 失败"
 done
-ls -l /etc/rc.d/ 2>/dev/null | grep -E 'bootled|nvme-automount|ha-config-path|portled' >> "$LOG" 2>&1
+ls -l /etc/rc.d/ 2>/dev/null | grep -E 'bootled|nvme-automount|ha-config-path' >> "$LOG" 2>&1
 
 # 首次启动立即执行一遍(不用等重启)。放后台, 避免格式化 250 GiB 分区拖慢开机。
 (

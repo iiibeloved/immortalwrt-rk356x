@@ -210,7 +210,7 @@ sync
 | 第 17 步超过 350 分钟被杀 | 超出 `timeout-minutes` | 把 `timeout-minutes` 提到 360（GitHub 上限），或关闭 ss-rust 缩短时间 |
 | Release 步骤失败但构建成功 | `publish_release` 权限/网络问题 | 用 `Publish firmware to Release` workflow 手动补发（见 7.3） |
 | 步骤显示 skipped | `if` 条件不满足（如 `publish_release=false`、或前序失败） | 检查输入参数与前序步骤 |
-| 手动 `mkfs`/`mount` 报 `No such device` / `Can't open blockdev` | 在线改分区表后内核还没生成分区节点 | 重启一次（新固件的 `docker-disk` 会自动重启一次并续跑） |
+| 手动 `mkfs`/`mount` 报 `No such device` / `Can't open blockdev` | 在线改分区表后内核还没生成分区节点 | **重启一次**再格式化（本固件不再自动重启，需手动重启） |
 | iStore「快速安装」里存储位置为空 | 没有任何可用数据分区（只有系统分区） | 先完成拆盘（新固件首启自动做），或手动建 p5/p6 并挂载 |
 
 ---
@@ -460,35 +460,22 @@ netstat -lntp | grep 7681        # 应看到 0.0.0.0:7681（而不是旧的 LAN 
 **安全提醒**：监听 `0.0.0.0` 只代表「不受网卡 IP 变化影响」，WAN 侧仍由防火墙默认策略拦截（没有放行 7681 的规则）；
 不要把 7681 加到 WAN 区域，也不要用 root 空密码。
 
-### 7.11 指示灯（电源灯常亮 / 网口灯不可控）
+### 7.11 电源灯：兼作「初始化进度指示」
 
-查过 `rk3568-nsy-g68-plus.dts` 与内核驱动后确认这台机器的灯分两类：
-
-| 灯 | 由谁控制 | 软件能否控制 |
-| --- | --- | --- |
-| 前面板电源灯 `led-power`（GPIO0_C4） | 内核 `gpio-leds` → `/sys/class/leds/led-power` | ✅ 可置常亮 |
-| RJ45 网口灯 | **Realtek RTL8367S 交换芯片内部逻辑** | ❌ 驱动未暴露 LED 属性 |
-
-**结论（2026-11-08 定稿）**：
-
-1. **电源灯固定常亮**。关闭它没有实际意义（不省电、不影响功能），因此**不再提供关闭开关**；
-   `/etc/init.d/portled`（START=70）每次开机把 `/sys/class/leds/*` 的 `trigger` 置为 `default-on`、`brightness` 置 1；
-2. **网口灯软件不可控**（`rtl8367b` 驱动只有 `enable_vlan/reset_mib/mib/info` 等属性，LED 相关寄存器仅控极性），
-   该需求已放弃；确实嫌亮就用物理遮挡，或对长期不用的口 `swconfig dev switch0 port <n> set enable 0`（该口会断网）。
-
-**电源灯还兼作「初始化进度指示」**（`/etc/init.d/bootled`，START=12）：
+电源灯 `led-power`（GPIO0_C4 → `/sys/class/leds/led-power`）由 `bootled`（START=12）统一管理，
+**不再有独立的「电源灯开关」脚本**（原 `portled` 已合并删除，避免两个脚本抢写同一个灯）。
 
 | 状态 | 含义 |
 | --- | --- |
-| **快速闪烁**（约 200 ms 亮/灭） | 正在初始化：挂载数据盘 / 执行一次性脚本 / `opkg update` 等 |
-| **常亮** | 初始化完成，系统就绪（可以登录 `192.168.100.1`） |
+| **快速闪烁**（约 200 ms 亮/灭） | 正在初始化：挂载 / 一次性脚本 / `opkg update` 等 |
+| **常亮** | 初始化完成，可登录 `192.168.100.1` |
 | 不亮 | `bootled` 未运行或硬件问题 |
 
-判定「就绪」的条件：`/etc/uci-defaults/` 已清空 **且** 没有 `mkfs/parted/ha-config-path/nvme-automount/opkg update` 在跑。
-最多闪烁 300 秒，超时后强制常亮（避免无网络时 `opkg` 重试导致长时间闪烁）。
-日志：`/etc/bootled.log`；可用 `BOOTLED_LED=/sys/class/leds/xxx` 指定别的灯。
+就绪判据：`/etc/uci-defaults/` 已清空 **且** 没有 `mkfs / parted / ha-config-path / nvme-automount / opkg update` 在跑；
+最多闪 300 秒，超时强制常亮。日志 `/etc/bootled.log`。
 
-日志：`/etc/portled.log`、`logread | grep portled`。
+**RJ45 网口灯不可控**：由 RTL8367S 交换芯片硬件驱动，`rtl8367b` 驱动未暴露 LED 属性；
+该需求已放弃，嫌亮用物理遮挡或对长期不用的口 `swconfig dev switch0 port <n> set enable 0`（该口会断网）。
 
 ### 7.12 回滚 / 删除发布
 
@@ -578,8 +565,8 @@ sha256sum -c docs/baseline.sha256 # 确认全 OK 再提交
 | --- | --- | --- |
 | 脚本语法 | `sh -n` 全部 8 个脚本 + `gen_image_generic.sh` | ✅ 全部通过 |
 | 执行位 | 远程 git tree mode 检查 | ✅ init.d / uci-defaults 均 `100755`，配置文件 `100644` |
-| 开机自启 | 每个 init.d 脚本都有对应 uci-defaults `enable` | ✅ docker-disk/docker-dataroot/nvme-automount → `98-enable-custom-initd`；portled → `98-portled`；ttyd → `98-fix-ttyd` |
-| 启动顺序 | START 值 | docker-disk 58 → docker-dataroot 60 → nvme-automount 62 → portled 70 → dockerd 99 ✅ |
+| 开机自启 | 每个 init.d 脚本都有对应 uci-defaults `enable` | ✅ bootled / nvme-automount / ha-config-path → `98-enable-custom-initd`；ttyd → `98-fix-ttyd` |
+| 启动顺序 | START 值 | bootled 12 → nvme-automount 62 → ha-config-path 75 → dockerd 99 ✅ |
 | 首次启动即生效 | `98-enable-custom-initd` 在后台立即执行一次（sleep 5） | ✅ 无需重启 |
 | NVMe 支持 | 内核模块 | ✅ kmod-nvme / kmod-fs-ext4 / exfat / vfat / btrfs 已在；**本次补上 kmod-fs-f2fs、kmod-fs-xfs、kmod-fs-ntfs3** |
 | 分区脚本幂等 | 假 sysfs 冒烟测试 | ✅ 已有 p5/p6 且已格式化 → 只挂载不重格；中途失败不写完成标记，下次自动重试 |
@@ -627,13 +614,10 @@ https://gh-proxy.com/https://github.com/iiibeloved/immortalwrt-rk356x/releases/d
 | --- | --- | --- | --- | --- |
 | `98-enable-custom-initd` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（OpenWrt 执行成功即删除该文件） | — |
 | `98-fix-ttyd` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（同上） | 只在存在 `interface` 时才改 |
-| `98-portled` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（同上） | — |
 | `99-set-lan-ip` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（同上） | 已是目标地址则直接跳过 |
 | `99-opkg-istore` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（同上） | 已有 arch 行则不重复加 |
-| `docker-disk` | `/etc/init.d/`（已 enable） | 每次开机 | 会进入，但**看到 `/etc/.docker-disk.done` 立刻返回** | 完成标记 + flock + 已有分区复用 + 已有 FS 不重格 |
-| `docker-dataroot` | `/etc/init.d/`（已 enable） | 每次开机 | 会，但只在检测到外挂盘且 docker 未手动指定时才动作 | `/etc/.docker-dataroot` 标记 |
 | `nvme-automount` | `/etc/init.d/`（已 enable） | **每次开机**（有意为之） | 会，但已挂载则跳过、fstab 按 UUID 去重 | 天然幂等 |
-| `portled` | `/etc/init.d/`（已 enable） | 每次开机 | 会（**必须**，否则 LED 状态每次开机会被内核重置） | 按配置重新应用 |
+| `bootled` | `/etc/init.d/`（已 enable） | 每次开机 | 会（**必须**）：先闪烁，就绪后置常亮 | 就绪判据 + 300s 超时 |
 
 **结论**：`uci-defaults` 那 5 个是**一次性**的，跑成功后被 OpenWrt 自动删除（失败的会保留、下次再试）；
 `/etc/init.d/` 里的 4 个是**常驻**的，每次开机都会执行，但都带幂等/守卫逻辑，**不会重复分区、重复格式化或重复写 fstab**。
@@ -886,7 +870,7 @@ firstboot-status      # 8 项逐条 ✅/⏳，最后给「已就绪 / 仍在初�
 | NVMe 挂载 | `/etc/nvme-automount.log` | `/proc/mounts` 中出现 `/mnt/nvme0` |
 | docker 数据目录 | `docker info` | `Docker Root Dir: /mnt/ext_relay/docker` |
 | HA 配置路径 | `/etc/ha-config.log` | `uci get homeassistant.@homeassistant[0].config_path` |
-| 指示灯 | `/etc/portled.log` | — |
+| 电源灯进度 | `/etc/bootled.log` | 常亮=就绪 |
 | 软件源 | `/etc/opkg-boot.log` | 末尾 `opkg update 成功（第 N 次）` |
 
 > 经验时长（256 GB eMMC）：第一次开机到自动重启 **1–3 分钟**；第二次开机到全部就绪 **2–5 分钟**。

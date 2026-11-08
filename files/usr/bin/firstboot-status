@@ -12,15 +12,17 @@ READY=1
 chk() { if eval "$2" >/dev/null 2>&1; then ok "$1"; else wait_ "$1"; READY=0; fi; }
 
 echo "==== 首启初始化状态 ===="
-echo "[1/8] 分区"
-chk "eMMC 已拆出 p5(ext_relay) 与 p6(Data)" 'grep -q "mmcblk0p5" /proc/partitions && grep -q "mmcblk0p6" /proc/partitions'
-echo "[2/8] 挂载"
-chk "/mnt/ext_relay 与 /mnt/data 已挂载" 'awk "\$2==\"/mnt/ext_relay\"" /proc/mounts | grep -q ext_relay; awk "\$2==\"/mnt/data\"" /proc/mounts | grep -q data'
-echo "[3/8] 数据盘（手动挂载）"
-if awk '$2 ~ /^\/mnt\/(data|ext_relay|nvme)/' /proc/mounts | grep -q .; then
-	ok "已挂载数据盘（$(awk '$2 ~ /^\/mnt\/(data|ext_relay|nvme)/{printf "%s ", $2}' /proc/mounts)）"
+echo "[1/8] 数据盘挂载"
+if awk '$2 ~ /^\/mnt\//' /proc/mounts | grep -q .; then
+	ok "已挂载：$(awk '$2 ~ /^\/mnt\//{printf "%s ", $2}' /proc/mounts)"
 else
-	wait_ "未挂载数据盘（本固件不再自动分区，请在 LuCI「系统→挂载点」或 parted+mount 手动挂载）"
+	wait_ "没有 /mnt 挂载（本固件不自动分区；需要数据盘请手动挂载，见 build-guide 7.6）"
+fi
+echo "[2/8] eMMC 额外分区（可选）"
+if grep -q "mmcblk0p5" /proc/partitions && grep -q "mmcblk0p6" /proc/partitions; then
+	ok "已划分 p5(ext_relay) / p6(Data)"
+else
+	ok "未划分（可选；不需要就不管，不影响就绪判定）"
 fi
 echo "[4/8] 后台任务"
 if pgrep -f 'mkfs|ha-config-path' >/dev/null 2>&1; then

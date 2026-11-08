@@ -1,6 +1,0 @@
-#!/bin/sh
-# 首次启动: 启用 portled 并按配置应用一次
-[ -x /etc/init.d/portled ] || exit 0
-/etc/init.d/portled enable >/dev/null 2>&1
-/etc/init.d/portled start >> /etc/portled.log 2>&1
-exit 0

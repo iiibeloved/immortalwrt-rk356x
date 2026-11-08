@@ -58,7 +58,7 @@
 | NVMe 自动检测挂载 → `/mnt/nvme0`（**只挂载、不格式化**，保留盘内数据） | `nvme-automount` | 常驻 | 已挂载跳过；fstab 按 UUID 去重；空白盘只记日志 |
 | TTYD 去掉 `@lan` 绑定（改 IP 不再「已拒绝连接」） | `98-fix-ttyd` + `files/etc/config/ttyd` | 一次性 | 无 `interface` 才改 |
 | 补 opkg arch、必要时关签名校验 | `99-opkg-istore` | 一次性 | 已有 arch 行则不重复 |
-| 指示灯（电源灯等 GPIO 灯）可关 | `portled` | 常驻 | 按 `/etc/config/portled` 应用 |
+| 电源灯兼作进度指示（快闪=初始化中 / 常亮=就绪） | `bootled` | 常驻 | 由 `firstboot-status` 同源判据决定何时置常亮 |
 
 **磁盘布局**（256 GB eMMC，镜像占约 4.3 GiB）：
 
@@ -74,7 +74,7 @@ p4 extended ── p5 ext4 ext_relay  50 GiB  → /mnt/ext_relay   (docker 数�
 
 ## 3. 存储分布
 
-先看分区与挂载（首次启动由 `docker-disk` 自动创建）：
+先看分区与挂载（**固件不再自动分区**，p5/p6 需手动创建；NVMe 自动挂载）：
 
 | 分区 | 大小 | 挂载点 | 用途 |
 | --- | --- | --- | --- |
@@ -254,7 +254,7 @@ cat bin/targets/rockchip/armv8/sha256sums
 > **首次开机操作要点**：LAN 接电脑、WAN 接上级路由（默认 DHCP，免设置）；通电后等 **1–2 分钟**即可访问
 > `http://192.168.100.1`（本版**不会**自动重启、也不会自动分区/格式化）。
 > 需要 docker 数据盘时再按 [build-guide 7.6](docs/build-guide.md) 手动划一次分区。
-> **判定初始化完成**：`ls /etc/uci-defaults/` 为空 + `/etc/.docker-disk.done` 存在 + 无 `mkfs` 进程；
+> **判定初始化完成**：电源灯**常亮**，或 `firstboot-status` 全绿（判据：`/etc/uci-defaults/` 已清空 + 无 `mkfs`/初始化进程）。
 > 下一版固件起可直接运行 `firstboot-status` 一键自检。详见 [build-guide 附录 I](docs/build-guide.md)。
 
 最新基线：**Release [`g68-plus-2026.11.08`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08)** · 167.1 MB · sha256 `d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f`
@@ -329,7 +329,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 | 项 | 说明 |
 | --- | --- |
 | `mergerfs` | ImmortalWrt 24.10 与 small-package 均无此包，未集成（可用 diskman + 多挂载点替代） |
-| RJ45 网口灯 | 由 RTL8367S 交换芯片硬件驱动，`rtl8367b` 驱动未暴露 LED 属性，**软件无法开关**（`portled` 只控 GPIO 灯，如电源灯） |
+| RJ45 网口灯 | 由 RTL8367S 交换芯片硬件驱动，`rtl8367b` 驱动未暴露 LED 属性，**软件无法开关**（电源灯由 `bootled` 控制） |
 | 小盘设备 | eMMC 剩余 < 58 GiB 时不自动拆盘 → iStore「存储位置」为空，需手动建分区 |
 | NVMe 空白盘 | 默认**不**自动格式化（保护数据）；确需格式化请 `touch /etc/nvme-automount.format` 后重启 |
 | HA 的 HACS（旧插件商店） | HA **2026.11 起内置 Marketplace 取代 HACS**，HACS 安装脚本会自行退出；固件已改为友好提示并跳过（不影响 HA 运行）。用「设置 → Marketplace」 |
@@ -337,6 +337,6 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 | iStore 程序空间 | iStore 应用装在 `/overlay`（4 GiB），**不是**数据盘；装大应用前先看 `df -h /overlay` |
 | 更新列表报 iStoreOS 源 `Signature check failed` | 那三个源的签名 key 未公开，固件已默认注释；商店安装不受影响。详见 [build-guide 附录 H](docs/build-guide.md) |
 | opkg 装包报 `has no valid architecture` | 旧固件首启脚本把 `arch` 行拼接坏了（优先级变成 `10arch`）；修复命令见 [build-guide 附录 G](docs/build-guide.md) |
-| 首启一次重启 | 若内核未即时识别新分区，`docker-disk` 会自动重启一次再接续（最多一次，防循环） |
+| 首启自动重启 | **已不存在**：自动分区脚本移除后，固件不会在首启重启；分区请手动做（build-guide 7.6） |
 | 时间同步 | RK3568 无电池 RTC，开机时间可能滞后；HTTPS 拉取失败时先 `date` 检查并等待 NTP |
 | 构建耗时 | 保留 ss-rust 时约 4 h 15 min；GitHub cron 偶有延迟/跳过，已用脚本核验兜底 |
