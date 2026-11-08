@@ -18,7 +18,7 @@
 #  日志: /etc/nvme-automount.log ; logread | grep nvme-automount
 # =============================================================================
 
-START=62          # 晚于 docker-disk(58) / docker-dataroot(60), 早于 dockerd(99)
+START=62          # 早于 dockerd(99)；本固件不做自动分区
 STOP=10
 
 : "${BLOCKDIR:=/sys/class/block}"

@@ -5,7 +5,7 @@
 > 以及 [kenzok8/small-package](https://github.com/kenzok8/small-package)、[iStoreOS](https://github.com/linkease) 提供的软件包与源。
 
 面向 **NSY G68-PLUS（RK3568 / ARMv8）** 的 ImmortalWrt 24.10 固件：**iStoreOS 风格**的初始化与商店、Docker、
-存储自动化（首启自动分区 + NVMe 自动挂载），全流程 GitHub Actions 构建、自动发版，配置以**冻结基线**约束。
+存储（NVMe 自动挂载、数据盘手动划分，**不做自动分区**），全流程 GitHub Actions 构建、自动发版，配置以**冻结基线**约束。
 
 ---
 
@@ -36,7 +36,7 @@
 | DHCP 池 | `192.168.100.100 – 192.168.100.249`（`dhcp.lan.start=100 / limit=150`，随网段自动偏移） |
 | 默认时区 | `Asia/Shanghai`（`CST-8`） |
 | 内置终端 | LuCI → 系统 → **TTYD 终端**（`ttyd` 监听 `0.0.0.0:7681`，不绑定网卡，改 IP 不掉线） |
-| 应用商店 | LuCI → **iStore**（安装向导的「存储位置」选 `/mnt/data`） |
+| 应用商店 | LuCI → **iStore**（「存储位置」下拉来自已挂载的盘，选中即可；固件不预设） |
 
 > 改地址：`uci set network.lan.ipaddr=192.168.100.1 && uci commit network && /etc/init.d/network reload`
 
@@ -44,16 +44,15 @@
 
 ## 2. 首次启动自动做了什么
 
-固件把「刷完还得手动分区/挂载」的步骤全部前置。脚本分两类语义：**一次性**（`/etc/uci-defaults/`，执行成功即被 OpenWrt 删除）
+固件只做**安全的自动化**（改 LAN、启服务、挂 NVMe、写 HA 路径）；涉及分区的动作一律留给手动，避免断电风险。脚本分两类语义：**一次性**（`/etc/uci-defaults/`，执行成功即被 OpenWrt 删除）
 与**常驻**（`/etc/init.d/`，每次开机执行但带幂等守卫）。
 
 | 动作 | 实现 | 时机 | 幂等保护 |
 | --- | --- | --- | --- |
 | 改 LAN 为 `192.168.100.1` | `99-set-lan-ip` | 一次性 | 已是目标值则跳过 |
 | 启用常驻脚本 + 首启立即执行一次 | `98-enable-custom-initd` | 一次性 | — |
-| 拆分剩余空间：`ext_relay` **50 GiB**（docker）+ `Data`（其余，共享/iStore） | `docker-disk` | 常驻 | `/etc/.docker-disk.done` + `flock` + 已有 p5/p6 复用 + 已有文件系统不重格 |
-| 分区表改动内核未识别 → **自动重启一次**续跑 | `docker-disk` | 常驻 | `/etc/.docker-disk.rebooted` 防循环 |
-| docker 数据目录 → `/mnt/ext_relay/docker` | `docker-disk` / `docker-dataroot` | 常驻 | 手动指定则尊重 |
+| **数据盘：由你手动分区/挂载**（固件不再自动分区） | 手动（`parted` + `mkfs` + `mount`，或 LuCI 挂载点） | — | 见 build-guide 7.6 |
+| docker 数据目录（可选，手动指定） | `uci set dockerd.globals.data_root=...` | — | 不指定则用 overlay 的 `/opt/docker` |
 | NVMe 自动检测挂载 → `/mnt/nvme0`（**只挂载、不格式化**，保留盘内数据） | `nvme-automount` | 常驻 | 已挂载跳过；fstab 按 UUID 去重；空白盘只记日志 |
 | TTYD 去掉 `@lan` 绑定（改 IP 不再「已拒绝连接」） | `98-fix-ttyd` + `files/etc/config/ttyd` | 一次性 | 无 `interface` 才改 |
 | 补 opkg arch、必要时关签名校验 | `99-opkg-istore` | 一次性 | 已有 arch 行则不重复 |
@@ -80,19 +79,22 @@ p4 extended ── p5 ext4 ext_relay  50 GiB  → /mnt/ext_relay   (docker 数�
 | `mmcblk0p1` | 16 MiB | — | kernel |
 | `mmcblk0p2` | 200 MiB | `/rom` | squashfs 只读根 |
 | **`mmcblk0p3`** | **4096 MiB** | **`/overlay`** | 系统可写层（配置、`opkg` 安装的 **iStore 应用本体**） |
-| **`mmcblk0p5`** | **50 GiB** | **`/mnt/ext_relay`** | **Docker 数据目录 `/mnt/ext_relay/docker`**（镜像/容器/卷） |
-| **`mmcblk0p6`** | 其余 | **`/mnt/data`** | 共享盘 + **iStore 应用的数据目录**（向导里「存储位置」选它） |
+| `mmcblk0p5`（可选，手动创建） | 自定（建议 50 GiB） | `/mnt/ext_relay` | Docker 数据目录（`dockerd.globals.data_root` 手动指定） |
+| `mmcblk0p6`（可选，手动创建） | 其余 | `/mnt/data` | 共享盘 / iStore 应用数据（向导里「存储位置」选它） |
 | NVMe（若有） | — | `/mnt/nvme0` | 仅挂载，保留原有内容，不被自动格式化 |
+
+> 出厂默认**没有** p5/p6，也**不会**自动分区/格式化（见 build-guide 7.6）。
+> 需要 docker 和数据盘时按手册手动划一次，之后 fstab 会自动挂载。
 
 **结论（容易混淆的两点）**
 
 | 对象 | 实际落盘位置 | 说明 |
 | --- | --- | --- |
-| **Docker 容器 / 镜像 / 卷** | **`/mnt/ext_relay/docker`（p5，50 GiB）** | 由 `uci dockerd.globals.data_root` 指定；`docker info` 里的 `Docker Root Dir` 应显示它 |
+| **Docker 容器 / 镜像 / 卷** | 默认 `/opt/docker`（overlay，4 GiB）；建议手动 `uci set dockerd.globals.data_root='/mnt/ext_relay/docker'` | `docker info` 里的 `Docker Root Dir` 应显示你设的路径 |
 | **iStore 应用（程序本体）** | **`/overlay`（p3，4096 MiB）** | iStore 通过 `opkg` 安装，`opkg` 的 `dest root /` 就是 overlay；商城里的「存储位置」**不会**把程序装到数据盘 |
 | iStore 应用**数据**（部分带向导的应用） | 你在「存储位置」里选的那块盘，建议 **`/mnt/data`** | 选择结果写入 `uci get istore.istore.last_path`，仅用于应用数据目录 |
 | 共享文件 / 下载 | `/mnt/data`（p6） | samba4、NFS、filemanager 的共享根建议指向这里 |
-| **Home Assistant 配置目录** | **`/mnt/data/Configs/HomeAssistant`**（自动选盘，见下） | 由 `ha-config-path` 首启写入 `homeassistant.@homeassistant[0].config_path`，挂进容器 `/config` |
+| **Home Assistant 配置目录** | 由 `ha-config-path` 在**已挂载的 /mnt 盘**上自动选一个（≥1 GiB），如 `/mnt/data/Configs/HomeAssistant` | 写入 `homeassistant.@homeassistant[0].config_path`，挂进容器 `/config` |
 
 **确认当前落盘**
 
@@ -247,9 +249,9 @@ cat bin/targets/rockchip/armv8/sha256sums
 > **WAN 接上级路由 LAN，默认设置就能上网**（本机 WAN=DHCP 客户端，LAN=192.168.100.1/24 + NAT），
 > 无需特殊设置；上级若没有 DHCP 或做了 MAC 白名单才需要调整。详见 [build-guide 附录 I](docs/build-guide.md)。
 >
-> **首次开机操作要点**：LAN 接电脑、WAN 接上级（可选但推荐）；通电后**不要登录、不要断电**，
-> 固件会在 1–3 分钟内**自动重启一次**（正常）；第二次开机后再等 2–5 分钟（后台格式化 50 GiB `ext_relay` + `Data`），
-> 然后访问 `http://192.168.100.1`。
+> **首次开机操作要点**：LAN 接电脑、WAN 接上级路由（默认 DHCP，免设置）；通电后等 **1–2 分钟**即可访问
+> `http://192.168.100.1`（本版**不会**自动重启、也不会自动分区/格式化）。
+> 需要 docker 数据盘时再按 [build-guide 7.6](docs/build-guide.md) 手动划一次分区。
 > **判定初始化完成**：`ls /etc/uci-defaults/` 为空 + `/etc/.docker-disk.done` 存在 + 无 `mkfs` 进程；
 > 下一版固件起可直接运行 `firstboot-status` 一键自检。详见 [build-guide 附录 I](docs/build-guide.md)。
 
@@ -317,7 +319,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 | 小盘设备 | eMMC 剩余 < 58 GiB 时不自动拆盘 → iStore「存储位置」为空，需手动建分区 |
 | NVMe 空白盘 | 默认**不**自动格式化（保护数据）；确需格式化请 `touch /etc/nvme-automount.format` 后重启 |
 | HA 的 HACS（旧插件商店） | HA **2026.11 起内置 Marketplace 取代 HACS**，HACS 安装脚本会自行退出；固件已改为友好提示并跳过（不影响 HA 运行）。用「设置 → Marketplace」 |
-| eMMC 拆盘失败（无 p5/p6、docker 跑到 NVMe） | `parted` 在磁盘占用时可能「rc≠0 但已写表」，旧脚本因此误建 primary p4。已修（以分区表实际状态为准 + 自动纠正 p4）；旧固件手动修复见 build-guide 7.7 |
+| **自动分区已移除** | 为避免「在线改 MBR + 重启窗口断电」损坏 eMMC，固件不再自动分区/格式化；数据盘由你手动划分（build-guide 7.6） |
 | iStore 程序空间 | iStore 应用装在 `/overlay`（4 GiB），**不是**数据盘；装大应用前先看 `df -h /overlay` |
 | 更新列表报 iStoreOS 源 `Signature check failed` | 那三个源的签名 key 未公开，固件已默认注释；商店安装不受影响。详见 [build-guide 附录 H](docs/build-guide.md) |
 | opkg 装包报 `has no valid architecture` | 旧固件首启脚本把 `arch` 行拼接坏了（优先级变成 `10arch`）；修复命令见 [build-guide 附录 G](docs/build-guide.md) |

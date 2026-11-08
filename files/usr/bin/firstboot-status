@@ -16,12 +16,14 @@ echo "[1/8] 分区"
 chk "eMMC 已拆出 p5(ext_relay) 与 p6(Data)" 'grep -q "mmcblk0p5" /proc/partitions && grep -q "mmcblk0p6" /proc/partitions'
 echo "[2/8] 挂载"
 chk "/mnt/ext_relay 与 /mnt/data 已挂载" 'awk "\$2==\"/mnt/ext_relay\"" /proc/mounts | grep -q ext_relay; awk "\$2==\"/mnt/data\"" /proc/mounts | grep -q data'
-echo "[3/8] 拆盘脚本"
-if [ -f /etc/.docker-disk.done ]; then ok "docker-disk 已完成（/etc/.docker-disk.done 存在）"
-elif [ -f /etc/.docker-disk.rebooted ]; then wait_ "已自动重启过一次，正在第二次开机续跑格式化"
-else wait_ "docker-disk 尚未完成（看 /etc/.docker-disk.log）"; READY=0; fi
+echo "[3/8] 数据盘（手动挂载）"
+if awk '$2 ~ /^\/mnt\/(data|ext_relay|nvme)/' /proc/mounts | grep -q .; then
+	ok "已挂载数据盘（$(awk '$2 ~ /^\/mnt\/(data|ext_relay|nvme)/{printf "%s ", $2}' /proc/mounts)）"
+else
+	wait_ "未挂载数据盘（本固件不再自动分区，请在 LuCI「系统→挂载点」或 parted+mount 手动挂载）"
+fi
 echo "[4/8] 后台任务"
-if pgrep -f 'mkfs|docker-disk|docker-dataroot|ha-config-path' >/dev/null 2>&1; then
+if pgrep -f 'mkfs|ha-config-path' >/dev/null 2>&1; then
 	wait_ "仍有后台任务在跑（格式化/挂载中，请再等）"; READY=0
 else ok "没有正在运行的初始化进程"; fi
 echo "[5/8] 一次性脚本"
@@ -29,8 +31,8 @@ LEFT=$(ls /etc/uci-defaults/ 2>/dev/null | wc -l)
 if [ "${LEFT:-0}" -eq 0 ]; then ok "uci-defaults 已全部执行并被删除"; else wait_ "还有 $LEFT 个一次性脚本未完成"; READY=0; fi
 echo "[6/8] docker"
 DROOT=$(docker info 2>/dev/null | awk -F': ' '/Docker Root Dir/{print $2}')
-if [ "$DROOT" = "/mnt/ext_relay/docker" ]; then ok "Docker Root Dir = $DROOT"
-elif [ -n "$DROOT" ]; then wait_ "Docker Root Dir = $DROOT（期望 /mnt/ext_relay/docker）"; READY=0
+if printf '%s' "$DROOT" | grep -q '^/mnt/'; then ok "Docker Root Dir = $DROOT（已指向外挂盘）"
+elif [ -n "$DROOT" ]; then wait_ "Docker Root Dir = $DROOT（仍在 overlay；需要时手动 uci set dockerd.globals.data_root）"; READY=0
 else wait_ "dockerd 还没起来"; READY=0; fi
 echo "[7/8] 其他服务"
 HAP=$(uci -q get homeassistant.@homeassistant[0].config_path 2>/dev/null)
@@ -51,6 +53,6 @@ if [ "$READY" = "1" ]; then
 	exit 0
 else
 	echo "==== 结论: 仍在初始化（未标记的项目请再等 1–2 分钟；若超过 10 分钟仍如此，看对应日志）===="
-	echo "常见日志: /etc/.docker-disk.log  /etc/opkg-boot.log  /etc/ha-config.log  /etc/nvme-automount.log"
+	echo "常见日志: /etc/opkg-boot.log  /etc/ha-config.log  /etc/nvme-automount.log"
 	exit 1
 fi

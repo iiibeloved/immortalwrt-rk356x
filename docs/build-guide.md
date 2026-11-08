@@ -304,100 +304,65 @@ tag      : g68-plus-2026.11.06      # 目标 tag；已存在则直接追加资�
 2. **extroot**：把整个 overlay 迁到 USB/SSD，`rootfs_data` 只留启动用（LuCI → 系统 → 挂载点 → 生成配置 → 启用 extroot）。
 3. **改镜像里的 rootfs_data 大小**：`scripts/gen_image_generic.sh` 里 `USERDATASIZE="2048"` 改成 `4096`（该文件不在 push 触发路径，改完需手动 Run workflow）。
 
-### 7.6 docker 数据目录自动落到外挂盘
+### 7.6 数据盘：手动分区 / 挂载（2026-11-08 起不再自动分区）
 
-固件内置 `/etc/init.d/docker-dataroot`（`files/` 目录打进镜像，START=60，早于 dockerd 的 START=99），
-开机时自动把 `dockerd.globals.data_root` 指向外挂盘，默认 `/opt/docker` 只作兜底：
+> **重要变更**：固件**已移除自动分区脚本**（`docker-disk` / `docker-dataroot`）。
+> 原因：在 eMMC 上在线改 MBR 需要重启才能被内核识别，而如果在格式化/重启窗口断电，
+> 可能留下不完整的 overlay/分区表 —— 权衡后改为**可靠的手动操作**，固件只负责“挂载即可用”。
 
-| 情况 | 行为 |
-| --- | --- |
-| 探测到 `/mnt/*` 下由 `/dev/sd*`、`/dev/nvme*`、`/dev/mmcblk*` 挂载的 ext4/btrfs/xfs/f2fs，且剩余 ≥ 8 GiB | 设 `data_root=<挂载点>/docker`（目录自动创建），并写标记 `/etc/.docker-dataroot` |
-| 没探测到合适的外挂盘 | 若之前是脚本设到外挂盘的，自动回退 `/opt/docker`；否则保持不动 |
-| `data_root` 已被你手工改成别的路径 | 完全不动（尊重手工设置），日志 `data_root=xxx 为手工设置, 跳过自动调整` |
+#### 7.6.1 一次性给 eMMC 划出 docker 盘与数据盘（手动，约 5 分钟）
 
-相关日志：`logread | grep docker-dataroot`。
-
-**想固定到某块盘**（推荐按 UUID 挂载后固定路径）：手工设置一次即可，之后脚本不再改动它——
+前提：确认 eMMC 上除 p1/p2/p3 外没有要保留的数据。
 
 ```sh
-uci set dockerd.globals.data_root='/mnt/data/docker'
-uci commit dockerd && /etc/init.d/dockerd restart
+# ① 看当前分区表（p3 结束位置记为 base，单位 MiB）
+parted -s /dev/mmcblk0 unit MiB print
+
+# ② 建扩展分区 + 两个逻辑分区（示例：p3 结束于 4597MiB，docker 50GiB）
+parted -s /dev/mmcblk0 unit MiB mkpart extended 4598 100%
+parted -s /dev/mmcblk0 unit MiB mkpart logical ext4 4599 55798
+parted -s /dev/mmcblk0 unit MiB mkpart logical ext4 55799 100%
+parted -s /dev/mmcblk0 unit MiB print          # 期望 4=extended, 5≈50GiB, 6=其余
+
+# ③ 必须重启：内核要重新读取分区表（否则 mkfs 会报 No such device）
+reboot
 ```
 
-判断条件：只要 `data_root` 不是 `/opt/docker`，且不等于标记文件里记录的「脚本上次设的值」，就视为手工设置。
-
-### 7.7 首次启动自动拆分剩余空间（256G eMMC 场景）
-
-镜像只占约 **4.3 GiB**（kernel 16 + rootfs 200 + rootfs_data 4096 MiB），256 GB 的 eMMC 有约 250 GB 未分配。
-固件内置 `/etc/init.d/docker-disk`（START=58），**首次启动**时把剩余空间拆成两块：
-
-| 分区 | 大小 | 文件系统 / 卷标 | 挂载点 | 用途 |
-| --- | --- | --- | --- | --- |
-| `p4` | 剩余空间全部 | **扩展分区（容器）** | — | 只用来容纳下面两个逻辑分区 |
-| `p5`（逻辑） | **50 GiB** | ext4 / **`ext_relay`** | `/mnt/ext_relay` | **docker 数据目录**（`dockerd.data_root=/mnt/ext_relay/docker`） |
-| `p6`（逻辑） | 其余（约 184 GiB ≈ 197 GB） | ext4 / **`Data`** | `/mnt/data` | 共享盘 |
-
-> 为什么用扩展+逻辑分区：MBR 最多 4 个主分区，镜像已占用 kernel/rootfs/rootfs_data 三个，
-> 只剩一个主分区槽位，所以两块新盘放在一个扩展分区里。
-
-执行细节：
-
-1. 由 `/rom` 反查启动盘（`/dev/mmcblk0` 或 `mmcblk1`）；
-2. 剩余空间 ≥ **58 GiB**（50 GiB docker + 至少 8 GiB Data）才动手，从最后一个分区末尾往后追加；
-3. `parted` 建扩展分区 + 两个逻辑分区 → `mkfs.ext4 -m 0 -E lazy_itable_init=1,discard` 并打卷标；
-4. 分别挂到 `/mnt/ext_relay`、`/mnt/data`，写入 fstab（按 **UUID**，之后每次开机自动挂载）；
-5. `dockerd.globals.data_root=/mnt/ext_relay/docker` 并重启 docker。
-
-| 安全性 | 说明 |
-| --- | --- |
-| 幂等 | 已存在 `LABEL=ext_relay` + `LABEL=Data` 时**只挂载不格式化** |
-| 只追加 | 只从最后一个分区末尾往后建，p1–p3 绝不改动 |
-| 失败兜底 | 任一步失败打日志并保留默认 `/opt/docker`，不阻塞开机 |
-| 只跑一次 | 成功后写 `/etc/.docker-disk.done` |
-| 小盘保护 | 剩余 < 58 GiB 直接跳过 |
-| 在线改表 | 新增分区后内核若不生成 `p0n` 节点，脚本**自动重启一次**（`/etc/.docker-disk.rebooted` 防循环），下次开机走「复用已有 p5/p6」分支继续格式化/挂载 |
-
-开关与排错：
+重启后：
 
 ```sh
-touch /etc/.docker-disk.done                                    # 关闭
-rm -f /etc/.docker-disk.done && /etc/init.d/docker-disk start    # 手动重跑
-cat /etc/.docker-disk.log ; logread | grep docker-disk           # 日志
+mkfs.ext4 -F -m 0 -L ext_relay /dev/mmcblk0p5     # docker 用，50 GiB
+mkfs.ext4 -F -m 0 -L Data      /dev/mmcblk0p6     # 数据/共享盘，其余
+mkdir -p /mnt/ext_relay /mnt/data
+mount -t ext4 /dev/mmcblk0p5 /mnt/ext_relay
+mount -t ext4 /dev/mmcblk0p6 /mnt/data
+df -h /mnt/ext_relay /mnt/data
+
+# ④ 写入 fstab（重启自动挂载，按 UUID）
+block detect > /etc/config/fstab && uci commit fstab
 ```
 
-想改 docker 分区容量：改脚本里的 `DOCKER_MIB`（默认 **51200 = 50 GiB**；阈值会自动跟着变 = DOCKER_MIB + 8 GiB），
-或改 `DOCKER_LABEL` / `DATA_LABEL` / 挂载点。
+也可以全程用 LuCI：**系统 → 挂载点**（新建分区、格式化、挂载、勾选“启用”），效果相同。
 
-**踩过的坑（2026-11-08 二次修复）**：`parted` 在磁盘被占用（rootfs 已挂载）时**可能返回非 0，
-但分区表其实已写入**；旧实现把 rc≠0 当失败，还会退化成 `mkpart primary` —— 结果建出一个
-**primary p4**，之后 `mkpart logical` 必然失败，脚本从此每次开机都失败（表现为「eMMC 没有 p5/p6、docker 跑到 NVMe」）。
-现版本改为**以 `parted print` 的实际状态为准**：
+> `parted` 用的是 `-a none` 之外的默认对齐；若报 `closest location`，把起点改成 `extended 起点 + 1`
+> （上面的 `4599` 就是为此留的 EBR 位置）。
 
-- 校验 p4 类型必须是 `extended`；若是误建的 `primary` 且**无文件系统**，自动删掉重建（有数据则拒绝并报错）；
-- `mk_part()` 每次尝试后回读分区表，按「分区号 + 类型」判定成功，不再依赖 rc；
-- p5 大小用 `parted -m -s unit MiB print` 读，校验 ≥90% × 50 GiB；
-- 分区表就位但内核未识别时，再自动重启一次续跑。
+#### 7.6.2 让 docker 使用 ext_relay
 
-**踩过的坑（2026-11-08 首次修复）**：ImmortalWrt 里 `/rom` 的挂载源显示为 **`/dev/root`**（squashfs 虚拟设备名），
-旧版 `boot_disk()` 直接拿它去 `/sys/class/block/` 查父磁盘 → 查不到 → 脚本静默跳过，表现为「刷完没有 p5/p6、docker 仍在 `/opt/docker`」。
-现版本先 `readlink -f` 解析软链（`/dev/root` → `/dev/mmcblk0p2`），失败再用 `lsblk -no PKNAME` 兜底，并会在日志里明确记录原因。
-已刷旧固件的机器需手动：`parted` 建 p4/p5/p6 → 重启 → `mkfs` + `mount` + `block detect`。
+```sh
+uci set dockerd.globals.data_root='/mnt/ext_relay/docker'
+uci commit dockerd
+/etc/init.d/dockerd restart
+docker info | grep -i 'docker root dir'      # 期望 /mnt/ext_relay/docker
+```
 
-**其他已修的健壮性问题**（2026-11-08 第二轮校核）：
+不设置的话 docker 用 overlay 里的 `/opt/docker`（仅 4 GiB，容易满）。
 
-| 问题 | 场景 | 修复 |
-| --- | --- | --- |
-| 部分完成状态死循环 | p4 已建但 p5/p6 缺一个 → 旧版会再执行 `mkpart extended` 并永久失败 | 检测 p4/p5/p6 各自是否存在，**只补缺的那块** |
-| 「已存在 LABEL」分支不写完成标记 | 每次开机重复挂载并刷日志 | 该分支也写 `/etc/.docker-disk.done` |
-| 无 NVMe 时开机白等 20 秒 | 没有 NVMe 硬件的机器 | 先看 `NVME_CLASS`(/sys/class/nvme)，无控制器立即返回并记日志 |
-| 策略调整：NVMe 只挂载不格式化 | 旧版会对空白盘自动建 GPT+ext4（有误格式化风险） | **默认改为只挂载、保留盘内数据**；需要格式化必须显式开启标记 |
+#### 7.6.3 iStore 的「存储位置」
 
-**与安装位置的关系**：拆盘成功后，docker 走 `/mnt/ext_relay/docker`，iStore 的**程序**仍在 `/overlay`、
-**数据**建议选 `/mnt/data` —— 完整对照见[附录 F](#附录-f-存储分布与安装位置docker--istore)。
-
-**对 iStore 商店的意义**：商店的「快速安装」向导必须从 `/admin/store/get_block_devices`
-（内部执行 `block info`）里选一个**存储位置**。拆盘成功前系统只有 p1/p2/p3 三个系统分区，
-列表为空 → 安装按钮点不动。拆盘并挂载后就会出现 `/mnt/ext_relay` 与 `/mnt/data`，选后者即可安装。
+固件**不再自动预设**任何安装路径：商店「快速安装」里的 `存储位置` 下拉，内容来自
+`lsblk` 中 **fssize > 1 GiB 且有挂载点** 的分区（例如你手动挂好的 `/mnt/data`、`/mnt/nvme0`），
+选哪个就用哪个；不选则用 `quickstart` 的默认目录。程序本体仍装进 `/overlay`（见[附录 F](#附录-f-存储分布与安装位置docker--istore)）。
 
 ### 7.8 内置 opkg 软件源（官方 + iStoreOS，刷完即用）
 

@@ -16,7 +16,7 @@
 #  日志: /etc/ha-config.log
 # =============================================================================
 
-START=75          # docker-disk(58) / docker-dataroot(60) / nvme(62) 之后, dockerd(99) 之前
+START=75          # nvme(62) 之后, dockerd(99) 之前；本固件不做自动分区
 STOP=10
 
 : "${MOUNTS:=/proc/mounts}"

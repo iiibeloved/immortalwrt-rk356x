@@ -21,19 +21,17 @@
 | --- | --- |
 | `files/etc/config/portled` | `56fc940821042050ae490ccc92181cdcf7422b78969e9cfd119e189e2d467263` |
 | `files/etc/config/ttyd` | `43666e86f2bdbfaf953a3b09bfdbf9960e6e1fff4fcd7cb687d0d257e17433e2` |
-| `files/etc/init.d/docker-dataroot` | `16ee4f4d025eff33a8d3aa195459254ca02b8bddae7ae759a04254b30d5b2108` |
-| `files/etc/init.d/docker-disk` | `9583cdb311b3a8d70222b8afaca51a8824fc9ae35e734e9e88d07d8281625d2f` |
-| `files/etc/init.d/ha-config-path` | `a8d3fac1f585dec59a739513bc69e37111649e7fa3abce4e360c603933589ed2` |
-| `files/etc/init.d/nvme-automount` | `5a8417dcb0ad7b4c2dd7fdeb76bbca1970917561b343ce5d787321796d5d6ab3` |
+| `files/etc/init.d/ha-config-path` | `74e8f6e759f3cf9bc2f98d5a208a41fb24a370b3b451b077d0614f5cd4f27c13` |
+| `files/etc/init.d/nvme-automount` | `76c5f27a4c09320f94260c8cdf0ecbdeaab20c965b6fb3689e1dc1e726ee7c28` |
 | `files/etc/init.d/portled` | `69642bac42fa4554449d0414d01f536ff0953df2703d2f3d1cbaf3f614ab1e13` |
 | `files/etc/opkg/distfeeds.conf` | `d7ab59f54676a07d47413bff28beb87b592166a7b0e63b7c2730ec54be2721b7` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |
-| `files/etc/uci-defaults/98-enable-custom-initd` | `7aea00f9520133d223960980c1cdb83f7f1f8c7b2ac125cd98171752f8b45fdf` |
+| `files/etc/uci-defaults/98-enable-custom-initd` | `44b15f9b87174bf67fa171843278805d374ff5adc867081b83ef411931253f58` |
 | `files/etc/uci-defaults/98-fix-ttyd` | `3ea3fc0ba31c8f2efa3bf43422589a695bc5d713d3f78a144581986e0acc0f59` |
 | `files/etc/uci-defaults/98-portled` | `91975c4b61ab5b3545f4e0698600c744497cf03496c814860bf8ffb643616a15` |
 | `files/etc/uci-defaults/99-opkg-istore` | `682b76bbad78f356a0aa8c0a294f4c44fd2b75b2210b93317c9b2afbea3847b0` |
 | `files/etc/uci-defaults/99-set-lan-ip` | `f48add100eb91cd175351357022cf76dbb4a68318471e2695cb98eca333208cd` |
-| `files/usr/bin/firstboot-status` | `d0116517b56a077963c7e08b1d2954cb96c3674859004aa3660d89453a1d56b0` |
+| `files/usr/bin/firstboot-status` | `92f3528e7cac4015495416d0508883750ed0ffa447e7d5585d15eb16d1aa423c` |
 | `files/usr/libexec/istorec/homeassistant.sh` | `38e3be3269f5e86383022481a8ddb6eaeee1c9bbbb7fe1efd498f4085134cff7` |
 
 > 完整基线清单见 [`baseline.sha256`](baseline.sha256)，校验：`sha256sum -c docs/baseline.sha256`。
