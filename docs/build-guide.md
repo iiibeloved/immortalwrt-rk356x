@@ -476,6 +476,18 @@ netstat -lntp | grep 7681        # 应看到 0.0.0.0:7681（而不是旧的 LAN 
 2. **网口灯软件不可控**（`rtl8367b` 驱动只有 `enable_vlan/reset_mib/mib/info` 等属性，LED 相关寄存器仅控极性），
    该需求已放弃；确实嫌亮就用物理遮挡，或对长期不用的口 `swconfig dev switch0 port <n> set enable 0`（该口会断网）。
 
+**电源灯还兼作「初始化进度指示」**（`/etc/init.d/bootled`，START=12）：
+
+| 状态 | 含义 |
+| --- | --- |
+| **快速闪烁**（约 200 ms 亮/灭） | 正在初始化：挂载数据盘 / 执行一次性脚本 / `opkg update` 等 |
+| **常亮** | 初始化完成，系统就绪（可以登录 `192.168.100.1`） |
+| 不亮 | `bootled` 未运行或硬件问题 |
+
+判定「就绪」的条件：`/etc/uci-defaults/` 已清空 **且** 没有 `mkfs/parted/ha-config-path/nvme-automount/opkg update` 在跑。
+最多闪烁 300 秒，超时后强制常亮（避免无网络时 `opkg` 重试导致长时间闪烁）。
+日志：`/etc/bootled.log`；可用 `BOOTLED_LED=/sys/class/leds/xxx` 指定别的灯。
+
 日志：`/etc/portled.log`、`logread | grep portled`。
 
 ### 7.12 回滚 / 删除发布

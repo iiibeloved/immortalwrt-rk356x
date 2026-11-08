@@ -36,6 +36,7 @@
 | DHCP 池 | `192.168.100.100 – 192.168.100.249`（`dhcp.lan.start=100 / limit=150`，随网段自动偏移） |
 | 默认时区 | `Asia/Shanghai`（`CST-8`） |
 | 内置终端 | LuCI → 系统 → **TTYD 终端**（`ttyd` 监听 `0.0.0.0:7681`，不绑定网卡，改 IP 不掉线） |
+| 电源灯指示 | **快速闪烁 = 正在初始化**（挂载/一次性脚本/opkg）；**常亮 = 就绪**；不亮 = 未启动（见 build-guide 7.11） |
 | 应用商店 | LuCI → **iStore**（「存储位置」下拉来自已挂载的盘，选中即可；固件不预设） |
 
 > 改地址：`uci set network.lan.ipaddr=192.168.100.1 && uci commit network && /etc/init.d/network reload`

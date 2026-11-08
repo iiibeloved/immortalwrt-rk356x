@@ -21,12 +21,13 @@
 | --- | --- |
 | `files/etc/config/portled` | `56fc940821042050ae490ccc92181cdcf7422b78969e9cfd119e189e2d467263` |
 | `files/etc/config/ttyd` | `43666e86f2bdbfaf953a3b09bfdbf9960e6e1fff4fcd7cb687d0d257e17433e2` |
+| `files/etc/init.d/bootled` | `15dee947ad93822728c81f1aefff1a63eea9806209819132da1044226bf8b225` |
 | `files/etc/init.d/ha-config-path` | `74e8f6e759f3cf9bc2f98d5a208a41fb24a370b3b451b077d0614f5cd4f27c13` |
 | `files/etc/init.d/nvme-automount` | `76c5f27a4c09320f94260c8cdf0ecbdeaab20c965b6fb3689e1dc1e726ee7c28` |
 | `files/etc/init.d/portled` | `69642bac42fa4554449d0414d01f536ff0953df2703d2f3d1cbaf3f614ab1e13` |
 | `files/etc/opkg/distfeeds.conf` | `d7ab59f54676a07d47413bff28beb87b592166a7b0e63b7c2730ec54be2721b7` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |
-| `files/etc/uci-defaults/98-enable-custom-initd` | `44b15f9b87174bf67fa171843278805d374ff5adc867081b83ef411931253f58` |
+| `files/etc/uci-defaults/98-enable-custom-initd` | `979079f18794eff1529b03f2a0a4de68917be5aab3667204d3181237e6e311f6` |
 | `files/etc/uci-defaults/98-fix-ttyd` | `3ea3fc0ba31c8f2efa3bf43422589a695bc5d713d3f78a144581986e0acc0f59` |
 | `files/etc/uci-defaults/98-portled` | `91975c4b61ab5b3545f4e0698600c744497cf03496c814860bf8ffb643616a15` |
 | `files/etc/uci-defaults/99-opkg-istore` | `682b76bbad78f356a0aa8c0a294f4c44fd2b75b2210b93317c9b2afbea3847b0` |
