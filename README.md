@@ -13,13 +13,14 @@
 
 1. [开箱信息](#1-开箱信息)
 2. [首次启动自动做了什么](#2-首次启动自动做了什么)
-3. [软件构成（iStoreOS 风格）](#3-软件构成istoreos-风格)
-4. [自动构建流程](#4-自动构建流程)
-5. [手动构建 / 本地复现](#5-手动构建--本地复现)
-6. [下载与刷机](#6-下载与刷机)
-7. [基线冻结与校验](#7-基线冻结与校验)
-8. [文档索引](#8-文档索引)
-9. [已知限制](#9-已知限制)
+3. [存储分布（docker / iStore）](#3-存储分布)
+4. [软件构成（iStoreOS 风格）](#4-软件构成istoreos-风格)
+5. [自动构建流程](#5-自动构建流程)
+6. [手动构建 / 本地复现](#6-手动构建--本地复现)
+7. [下载与刷机](#7-下载与刷机)
+8. [基线冻结与校验](#8-基线冻结与校验)
+9. [文档索引](#9-文档索引)
+10. [已知限制](#10-已知限制)
 
 ---
 
@@ -70,7 +71,34 @@ p4 extended ── p5 ext4 ext_relay  50 GiB  → /mnt/ext_relay   (docker 数�
 
 ---
 
-## 3. 软件构成（iStoreOS 风格）
+## 3. 存储分布
+
+先看分区与挂载（首次启动由 `docker-disk` 自动创建）：
+
+| 分区 | 大小 | 挂载点 | 用途 |
+| --- | --- | --- | --- |
+| `mmcblk0p1` | 16 MiB | — | kernel |
+| `mmcblk0p2` | 200 MiB | `/rom` | squashfs 只读根 |
+| **`mmcblk0p3`** | **4096 MiB** | **`/overlay`** | 系统可写层（配置、`opkg` 安装的 **iStore 应用本体**） |
+| **`mmcblk0p5`** | **50 GiB** | **`/mnt/ext_relay`** | **Docker 数据目录 `/mnt/ext_relay/docker`**（镜像/容器/卷） |
+| **`mmcblk0p6`** | 其余 | **`/mnt/data`** | 共享盘 + **iStore 应用的数据目录**（向导里「存储位置」选它） |
+| NVMe（若有） | — | `/mnt/nvme0` | 仅挂载，保留原有内容，不被自动格式化 |
+
+**结论（容易混淆的两点）**
+
+| 对象 | 实际落盘位置 | 说明 |
+| --- | --- | --- |
+| **Docker 容器 / 镜像 / 卷** | **`/mnt/ext_relay/docker`（p5，50 GiB）** | 由 `uci dockerd.globals.data_root` 指定；`docker info` 里的 `Docker Root Dir` 应显示它 |
+| **iStore 应用（程序本体）** | **`/overlay`（p3，4096 MiB）** | iStore 通过 `opkg` 安装，`opkg` 的 `dest root /` 就是 overlay；商城里的「存储位置」**不会**把程序装到数据盘 |
+| iStore 应用**数据**（部分带向导的应用） | 你在「存储位置」里选的那块盘，建议 **`/mnt/data`** | 选择结果写入 `uci get istore.istore.last_path`，仅用于应用数据目录 |
+| 共享文件 / 下载 | `/mnt/data`（p6） | samba4、NFS、filemanager 的共享根建议指向这里 |
+
+> 如果 `docker info` 显示 `Docker Root Dir: /opt/docker`，说明拆盘脚本还没成功跑过（此时 docker 实际占用的是 overlay 的 4 GiB，很容易满）。
+> 如果 iStore 安装时报「空间不足」，那是 `/overlay`（4 GiB）满了，不是数据盘满了 —— 用 `df -h /overlay` 确认。
+
+---
+
+## 4. 软件构成（iStoreOS 风格）
 
 | 维度 | 内容 |
 | --- | --- |
@@ -89,9 +117,9 @@ p4 extended ── p5 ext4 ext_relay  50 GiB  → /mnt/ext_relay   (docker 数�
 
 ---
 
-## 4. 自动构建流程
+## 5. 自动构建流程
 
-### 4.1 触发方式
+### 5.1 触发方式
 
 | 方式 | 说明 |
 | --- | --- |
@@ -112,7 +140,7 @@ p4 extended ── p5 ext4 ext_relay  50 GiB  → /mnt/ext_relay   (docker 数�
 
 > 临时试验请**显式传参**，不要改默认值；同日多次构建会自动加 `-r<run_number>` 后缀并存。
 
-### 4.2 流水线（24 步，关键闸门）
+### 5.2 流水线（24 步，关键闸门）
 
 ```
 释放空间 → 检出源码 → chmod 内置脚本 → 校验配置(+ 基线强校验) → 装依赖
@@ -129,7 +157,7 @@ p4 extended ── p5 ext4 ext_relay  50 GiB  → /mnt/ext_relay   (docker 数�
 - **闸门 4**：镜像 MBR 断言必须为 `16 / 200 / 4096` MiB，否则失败；
 - **产物**：`*.img.gz` + `sha256sums` 自动挂到 Release，说明页内置**直链 + 3 条加速链接**。
 
-### 4.3 耗时基线（保留 ss-rust）
+### 5.3 耗时基线（保留 ss-rust）
 
 | 阶段 | 耗时 |
 | --- | --- |
@@ -140,7 +168,7 @@ p4 extended ── p5 ext4 ext_relay  50 GiB  → /mnt/ext_relay   (docker 数�
 
 ---
 
-## 5. 手动构建 / 本地复现
+## 6. 手动构建 / 本地复现
 
 适合本地调试或没有 Actions 的环境（Ubuntu 22.04+ / Debian 12，≥ 60 GB 磁盘，≥ 8 GB RAM）。
 
@@ -183,7 +211,7 @@ cat bin/targets/rockchip/armv8/sha256sums
 
 ---
 
-## 6. 下载与刷机
+## 7. 下载与刷机
 
 最新基线：**Release [`g68-plus-2026.11.08`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08)** · 167.1 MB · sha256 `d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f`
 
@@ -211,7 +239,7 @@ sudo dd if="${FILE%.gz}" of=/dev/sdX bs=4M conv=fsync status=progress   # /dev/s
 
 ---
 
-## 7. 基线冻结与校验
+## 8. 基线冻结与校验
 
 配置已冻结：**除显式变更请求外，所有自动/手动构建都基于同一基线**，并由 CI 强制校验。
 
@@ -229,7 +257,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 
 ---
 
-## 8. 文档索引
+## 9. 文档索引
 
 | 文档 | 内容 |
 | --- | --- |
@@ -240,7 +268,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 
 ---
 
-## 9. 已知限制
+## 10. 已知限制
 
 | 项 | 说明 |
 | --- | --- |

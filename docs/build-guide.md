@@ -677,3 +677,40 @@ rm -f /etc/.docker-disk.done /etc/.docker-disk.rebooted   # 允许 docker-disk �
 - DHCP 池：`192.168.100.100 – 192.168.100.249`（`dhcp.lan` 的 start/limit 是相对网段的偏移，改网段后自动跟随）
 - 改完地址后旧网段（192.168.1.x）的会话会断开，电脑重新获取 DHCP 即可
 - 想改回或换别的地址：`uci set network.lan.ipaddr=192.168.1.1 && uci commit network && /etc/init.d/network reload`
+
+
+## 附录 F. 存储分布与安装位置（docker / iStore）
+
+| 分区 | 大小 | 挂载点 | 谁在用 |
+| --- | --- | --- | --- |
+| `mmcblk0p1` | 16 MiB | — | kernel |
+| `mmcblk0p2` | 200 MiB | `/rom` | squashfs 根（只读） |
+| `mmcblk0p3` | 4096 MiB | `/overlay` | 系统可写层 + **iStore 应用本体**（opkg 装到这里） |
+| `mmcblk0p5` | 50 GiB | `/mnt/ext_relay` | **Docker** 数据目录 `/mnt/ext_relay/docker` |
+| `mmcblk0p6` | 其余 | `/mnt/data` | 共享盘 + **iStore 应用数据**（向导「存储位置」选它） |
+| NVMe | — | `/mnt/nvme0` | 只挂载，内容不动 |
+
+**怎么确认**
+
+```sh
+docker info | grep -i 'docker root dir'      # 期望 /mnt/ext_relay/docker
+df -h /overlay /mnt/ext_relay /mnt/data      # overlay 满 → iStore 安装失败
+du -sh /mnt/ext_relay/docker                 # docker 实际占用
+uci get istore.istore.last_path              # 商店里选的应用数据目录
+opkg list-installed | wc -l                  # 已装包数（含 iStore 应用）
+```
+
+**两条容易踩的误解**
+
+1. iStore 的「存储位置」**不是**程序安装位置：ipk 的安装目标由 `opkg` 的 `dest root /` 决定，永远是 `/overlay`（p3）。
+   那个下拉框只把路径传给应用的安装向导（`AUTOCONF=<pkg> path=...`）并记到 `istore.last_path`，用于**应用数据**。
+2. `docker info` 若显示 `/opt/docker`，说明拆盘没成功（旧固件 bug），此时 docker 在 overlay 的 4 GiB 内跑，很容易把系统撑满。
+
+**想把 docker 挪到别的盘**
+
+```sh
+uci set dockerd.globals.data_root='/mnt/data/docker'   # 或 /mnt/nvme0/docker
+uci commit dockerd && /etc/init.d/dockerd restart
+docker info | grep -i 'docker root dir'
+```
+（迁移前先 `docker ps -a` 停掉容器，旧目录数据可 `cp -a` 过去。）
