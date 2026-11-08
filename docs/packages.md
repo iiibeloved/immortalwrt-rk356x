@@ -25,12 +25,12 @@
 | `files/etc/init.d/docker-disk` | `1ed52fcd282bf90c1c4cf035e641793fbafe6a91b8c8a38b1fcb58ad5c1eede3` |
 | `files/etc/init.d/nvme-automount` | `5a8417dcb0ad7b4c2dd7fdeb76bbca1970917561b343ce5d787321796d5d6ab3` |
 | `files/etc/init.d/portled` | `12491a12f5acf3572b791da301a1832b8a9e07eb3328854eaeb664b4e503d5d9` |
-| `files/etc/opkg/distfeeds.conf` | `e5df9a14aebec5b1e5710c1bc09aafe8a0097d353e0e9726e7cb2d59d93a36b6` |
+| `files/etc/opkg/distfeeds.conf` | `d7ab59f54676a07d47413bff28beb87b592166a7b0e63b7c2730ec54be2721b7` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |
 | `files/etc/uci-defaults/98-enable-custom-initd` | `3700abd9fc5ce141bd643a43703a831a25946ec4720307521f8ad978d2384a7f` |
 | `files/etc/uci-defaults/98-fix-ttyd` | `3ea3fc0ba31c8f2efa3bf43422589a695bc5d713d3f78a144581986e0acc0f59` |
 | `files/etc/uci-defaults/98-portled` | `91975c4b61ab5b3545f4e0698600c744497cf03496c814860bf8ffb643616a15` |
-| `files/etc/uci-defaults/99-opkg-istore` | `ebd455bbe63ccaf08b1687ff727186de84a55d01e821581ed53c42ab27318e94` |
+| `files/etc/uci-defaults/99-opkg-istore` | `682b76bbad78f356a0aa8c0a294f4c44fd2b75b2210b93317c9b2afbea3847b0` |
 | `files/etc/uci-defaults/99-set-lan-ip` | `f48add100eb91cd175351357022cf76dbb4a68318471e2695cb98eca333208cd` |
 
 > 完整基线清单见 [`baseline.sha256`](baseline.sha256)，校验：`sha256sum -c docs/baseline.sha256`。

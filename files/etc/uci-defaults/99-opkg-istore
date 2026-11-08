@@ -88,10 +88,12 @@ while [ "$n" -le 3 ]; do
 		log "opkg update 成功（第 $n 次）"
 		exit 0
 	fi
-	if grep -qiE 'signature|signature check failed' "$LOG" 2>/dev/null; then
-		log "签名校验失败，关闭 check_signature 后重试"
-		sed -i 's/^option check_signature.*/option check_signature 0/' "$CONF" 2>/dev/null
-		grep -q '^option check_signature' "$CONF" || { ensure_newline; echo 'option check_signature 0' >> "$CONF"; }
+	# iStoreOS 源的签名 key 未公开，必然校验失败；此时注释掉 check_signature 后重试
+	if grep -qiE 'signature check failed|no .*signature|failed to verify' "$LOG" 2>/dev/null; then
+		log "签名校验失败（iStoreOS 源无公开 key），注释 check_signature 后重试"
+		sed -i 's/^\(option check_signature.*\)$/#\1/' "$CONF" 2>/dev/null
+		sed -i 's/^option check_signature 0$/#option check_signature/' "$CONF" 2>/dev/null
+		grep -qE '^#?option check_signature' "$CONF" || { ensure_newline; echo '#option check_signature' >> "$CONF"; }
 	fi
 	log "opkg update 第 $n 次失败，10 秒后重试"
 	sleep 10

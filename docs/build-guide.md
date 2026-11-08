@@ -777,18 +777,29 @@ Remove wrong Signature file.
 **原因**：iStoreOS 的 `store` / `nas_luci` / `nas` 三个仓库由 key **`1d15e401c11b3e0f`** 签名，
 该公钥未公开发布；仓库根目录只提供 `a56f16274c6d486b`（只能验证 `all/compat` 这一个子源）。
 
-**固件默认策略**：这三个源在 `/etc/opkg/distfeeds.conf` 里**默认注释掉**，因此 `opkg update` 干净无报错。
+**固件默认策略**：三个源**保持启用**（这样「软件包」里能看到 iStoreOS 的包），
+首次启动脚本检测到签名失败时，会把 `/etc/opkg.conf` 里的 `option check_signature` **注释掉**后重试，
+之后 `opkg update` 干净无报错。日志见 `/etc/opkg-boot.log`。
 
 | 场景 | 做法 |
 | --- | --- |
 | 在 **iStore 商店**装应用 | 直接用商店即可。商店走 `/bin/is-opkg`，有独立源列表（`istore.istoreos.com/repo/{all,aarch64_generic}/isfeeds.conf`）且**跳过签名校验** |
-| 想在 **LuCI 软件包**里直接装 iStoreOS 的包 | 取消 `distfeeds.conf` 里三行注释，并 `option check_signature 0`（或 `sed -i 's/^option check_signature.*/option check_signature 0/' /etc/opkg.conf`），再 `opkg update` |
+| 在 **LuCI 软件包**里装 iStoreOS 的包 | 保持三源启用 + `option check_signature` 注释（脚本会自动处理）；等价手工命令：`sed -i 's/^\(option check_signature.*\)$/#\1/' /etc/opkg.conf && opkg update` |
+| 想恢复**严格校验** | 恢复 `option check_signature`，并把三条 iStoreOS 源注释（官方 6 源签名均正常） |
 
-**已刷旧固件想立刻消除这三条报错**：
+**已刷旧固件想立刻消除这三条报错**（二选一）：
 
 ```sh
+# 方案 A（推荐, 保留 iStoreOS 包源）: 关闭签名校验
+sed -i 's/^\(option check_signature.*\)$/\#\1/' /etc/opkg.conf
+opkg update
+
+# 方案 B（严格校验官方源）: 注释掉三条 iStoreOS 源
 sed -i 's#^src/gz istore_#\#src/gz istore_#' /etc/opkg/distfeeds.conf
-opkg update        # 之后只会更新 6 个官方源
+opkg update
 ```
+
+> 取舍：方案 A 会同时不再校验官方源的签名（因为 opkg 没有「按源」开关）；方案 B 保留官方校验，
+> 但「软件包」里看不到 iStoreOS 的包（商店安装不受影响）。
 
 （不影响已安装的 iStore 与商店安装应用。）
