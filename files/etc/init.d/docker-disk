@@ -309,7 +309,19 @@ start() {
 	fi
 
 	# 在线改分区表后内核通常不会立刻生成新分区节点(mknod 出来的节点无法 mkfs/mount),
-	# 检测不到就让系统重启一次; 下次开机走上面「已存在 p5/p6」的复用分支继续格式化。
+	# 先尝试让内核免重启识别新分区(partx 走 BLKPG, 磁盘有分区被挂载时通常也能成功)
+	if [ "$DRYRUN" != "1" ] && [ ! -e "$BLOCKDIR/${DISK}p5" ]; then
+		if command -v partx >/dev/null 2>&1; then
+			partx -a -u "$DEVDIR/$DISK" >>"$LOG" 2>&1 || partx -a "$DEVDIR/$DISK" >>"$LOG" 2>&1 || true
+			[ -e "$BLOCKDIR/${DISK}p5" ] && log "partx 已让内核识别新分区(无需重启)"
+		fi
+		# 节点没生成但内核对象已存在时补一个设备节点
+		if [ ! -e "$DEVDIR/${DISK}p5" ] && [ -e "$BLOCKDIR/${DISK}p5" ]; then
+			mknode "${DISK}p5" 5; mknode "${DISK}p6" 6
+		fi
+	fi
+
+	# 仍检测不到就让系统重启一次; 下次开机走上面「已存在 p5/p6」的复用分支继续格式化。
 	if [ "$DRYRUN" != "1" ] && [ ! -e "$BLOCKDIR/${DISK}p5" ]; then
 		if [ -f /etc/.docker-disk.rebooted ]; then
 			log "重启后仍未识别 ${DISK}p5, 放弃自动处理(请手动 parted/mkfs 或反馈)"
