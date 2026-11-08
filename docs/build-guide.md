@@ -886,6 +886,49 @@ cat /etc/.docker-disk.log                     # 拆盘全过程
 cat /etc/opkg-boot.log | tail -5              # opkg 初始化结果
 ```
 
+### 四点五、怎么判断「初始化已经跑完」
+
+最省事的判断：**一次性脚本目录被清空 + 完成标记出现 + 90 秒内没有 mkfs 进程**。
+
+```sh
+# ① 一次性脚本应已全部被删除（OpenWrt 执行成功即删）
+ls /etc/uci-defaults/                 # 期望：无输出
+
+# ② 拆盘完成标记（存在=分区+格式化+挂载+fstab+docker root 都已做完）
+ls -l /etc/.docker-disk.done          # 期望：存在
+ls -l /etc/.docker-disk.rebooted      # 期望：不存在（存在=刚重启过，还在第二轮）
+
+# ③ 没有正在跑的初始化进程
+pgrep -f 'mkfs|docker-disk|docker-dataroot|ha-config-path'   # 期望：无输出
+
+# ④ 结果自检
+df -h | grep -E 'ext_relay|/mnt/data'
+docker info | grep -i 'docker root dir'
+```
+
+**从下一版固件起**可以直接跑一条命令（本次 r25 里还没有这个文件）：
+
+```sh
+firstboot-status      # 8 项逐条 ✅/⏳，最后给「已就绪 / 仍在初始化」结论
+```
+
+各步骤的日志与标记一览：
+
+| 步骤 | 日志 | 完成标记/判据 |
+| --- | --- | --- |
+| 启用常驻脚本 + 首启执行 | `/etc/custom-initd.log` | `/etc/rc.d/S58docker-disk` 等符号链接存在 |
+| LAN 改址 | `/etc/lan-ip.log` | `uci get network.lan.ipaddr` = `192.168.100.1` |
+| TTYD 修复 | `/etc/ttyd-fix.log` | `netstat -lnt \| grep 7681` |
+| eMMC 拆盘 | `/etc/.docker-disk.log` | `/etc/.docker-disk.done`（末尾日志 `完成: …`） |
+| NVMe 挂载 | `/etc/nvme-automount.log` | `/proc/mounts` 中出现 `/mnt/nvme0` |
+| docker 数据目录 | `docker info` | `Docker Root Dir: /mnt/ext_relay/docker` |
+| HA 配置路径 | `/etc/ha-config.log` | `uci get homeassistant.@homeassistant[0].config_path` |
+| 指示灯 | `/etc/portled.log` | — |
+| 软件源 | `/etc/opkg-boot.log` | 末尾 `opkg update 成功（第 N 次）` |
+
+> 经验时长（256 GB eMMC）：第一次开机到自动重启 **1–3 分钟**；第二次开机到全部就绪 **2–5 分钟**。
+> 超过 **10 分钟**仍未出现 `.done`，按上一节看 `/etc/.docker-disk.log`。
+
 ### 五、如果 10 分钟后仍没有 p5/p6
 
 按顺序看两处日志，按报错对照 [7.7 节](#77-首次启动自动拆分剩余空间256g-emmc-场景) 的坑位表：
