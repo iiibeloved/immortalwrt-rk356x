@@ -19,8 +19,9 @@
 6. [手动构建 / 本地复现](#6-手动构建--本地复现)
 7. [下载与刷机](#7-下载与刷机)
 8. [基线冻结与校验](#8-基线冻结与校验)
-9. [文档索引](#9-文档索引)
-10. [已知限制](#10-已知限制)
+9. [刷机后首次配置（必做）](#9-刷机后首次配置必做)
+10. [文档索引](#10-文档索引)
+11. [已知限制](#11-已知限制)
 
 ---
 
@@ -300,7 +301,19 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 
 ---
 
-## 9. 文档索引
+## 9. 刷机后首次配置（必做）
+
+> 详细步骤见 **[build-guide 附录 K](docs/build-guide.md)**，这里是要点顺序。
+
+1. **改密码**：`http://192.168.100.1`（root / 空密码）→ 系统 → 管理权 → 修改密码；顺手设时区 `Asia/Shanghai`；
+2. **确认上网**：`ping 223.5.5.5`、`opkg update`（WAN 默认 DHCP，接上级 LAN 即可）；
+3. **eMMC 手动分区**（固件不再自动分区）：`parted` 建 extended + `p5`(50 GiB) + `p6`(其余) → **重启** → `mkfs.ext4 -L ext_relay/Data` → `mount` → `block detect > /etc/config/fstab`；
+4. **Docker 放 NVMe（推荐，eMMC 寿命友好）**：`uci set dockerd.globals.data_root='/mnt/nvme0/docker'` → `commit` → 重启 dockerd → `docker info` 确认；
+   > eMMC 剩余约 229 GiB **建议先不分区**（不写=不磨损）；确有需要时再按附录 K3 划 `ext_relay`/`Data`，或把 overlay 扩到 8 GiB（需重出固件）。
+5. **iStore 存储位置**：商店「快速安装 → 存储位置」选 `/mnt/data`（程序本体仍在 `/overlay`）；
+6. **收尾**：`firstboot-status` 全绿、`df -h`、`docker info`、`uci show dockerd` 核对。
+
+## 10. 文档索引
 
 | 文档 | 内容 |
 | --- | --- |
@@ -311,7 +324,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 
 ---
 
-## 10. 已知限制
+## 11. 已知限制
 
 | 项 | 说明 |
 | --- | --- |

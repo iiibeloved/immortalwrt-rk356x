@@ -1026,3 +1026,178 @@ uci commit network; uci commit dhcp
 「系统 → 软件包 → 刷新列表」或 `opkg update`；更新完想改成交换机模式再按方案 B 改。
 
 > 补充：方案 A/B 都不影响首启的自动拆盘、NVMe 挂载、docker 数据目录、HA 配置路径 —— 那些与网络接入方式无关。
+
+
+## 附录 K. 刷机后首次配置手册（11-09 起适用）
+
+> 适用于「已移除自动分区脚本」的固件：**固件不会自动分区、不会自动重启**，下面按顺序做一遍即可。
+> 全程约 15 分钟，其中分区 + 重启约 5 分钟。
+
+### K0. 判断固件已就绪
+
+| 判据 | 说明 |
+| --- | --- |
+| **电源灯常亮** | `bootled` 判断初始化完成（快速闪烁=仍在初始化） |
+| 浏览器能开 `http://192.168.100.1` | LAN 默认地址（DHCP 池 `192.168.100.100–249`） |
+| `firstboot-status` 全绿 | 8 项自检（挂载 / 一次性脚本 / docker / opkg …） |
+
+```sh
+firstboot-status
+```
+
+### K1. 登录并改密码（必做）
+
+浏览器 `http://192.168.100.1` → 用户名 `root`、**密码为空** → 登录后立刻：
+
+- LuCI：**系统 → 管理权 → 修改密码**（建议强密码）
+- 或命令行：
+
+```sh
+passwd root
+```
+
+同时建议：
+
+```sh
+uci set system.@system[0].timezone='CST-8'
+uci set system.@system[0].zonename='Asia/Shanghai'
+uci commit system
+```
+
+### K2. 确认上网正常（WAN 接上级路由 LAN 的默认场景）
+
+```sh
+ip -4 addr show | grep -A2 eth1        # WAN 是否拿到 IP
+ping -c3 223.5.5.5                     # 通外网
+opkg update                            # 软件源可用
+```
+
+需要 PPPoE（光猫桥接）或静态 IP 时见[附录 J](#附录-j-外网接入方式路由模式--交换机ap模式)。
+
+### K3. 给 eMMC 划出 50 GiB 的 `ext_relay` 与 `Data` 盘（手动，一次就好）
+
+> ⚠️ 会改动 eMMC 分区表；操作期间**不要断电**。已有的 p1/p2/p3 不受影响。
+
+```sh
+# ① 自动推导边界（p3 结束位置 + 1 MiB 作为扩展分区起点）
+END=$(parted -m -s /dev/mmcblk0 unit MiB print | awk -F: '$1=="3"{gsub(/MiB/,"",$3); print int($3)}')
+S=$((END+1)); A=$((S+1)); B=$((A+51200-1))
+echo "extended=${S}MiB  p5=${A}..${B}MiB(50GiB)  p6=$((B+1))..100%"
+
+# ② 建扩展分区 + 两个逻辑分区
+parted -s /dev/mmcblk0 unit MiB mkpart extended ${S} 100%
+parted -s /dev/mmcblk0 unit MiB mkpart logical ext4 ${A} ${B}
+parted -s /dev/mmcblk0 unit MiB mkpart logical ext4 $((B+1)) 100%
+parted -s /dev/mmcblk0 print          # 期望 4=extended / 5≈50GiB / 6=其余
+
+# ③ 必须重启（内核要重新读分区表，否则 mkfs 报 No such device）
+reboot
+```
+
+重启后：
+
+```sh
+mkfs.ext4 -F -m 0 -L ext_relay /dev/mmcblk0p5     # docker 专用 50 GiB
+mkfs.ext4 -F -m 0 -L Data      /dev/mmcblk0p6     # 数据/共享盘 其余
+
+mkdir -p /mnt/ext_relay /mnt/data
+mount -t ext4 /dev/mmcblk0p5 /mnt/ext_relay
+mount -t ext4 /dev/mmcblk0p6 /mnt/data
+df -h /mnt/ext_relay /mnt/data
+
+# 写入 fstab（按 UUID，重启自动挂载）
+block detect > /etc/config/fstab && uci commit fstab
+```
+
+也可以全程用 LuCI：**系统 → 挂载点**（新建分区 → 格式化 → 挂载 → 勾选「启用」）。
+
+### K4. 把 Docker 放到手动分区（`/mnt/ext_relay/docker`）
+
+```sh
+# 停 docker
+/etc/init.d/dockerd stop
+
+# 若之前 docker 在别处（如 /mnt/nvme0/docker）且想保留镜像：先搬过去
+mkdir -p /mnt/ext_relay/docker
+[ -d /mnt/nvme0/docker ] && cp -a /mnt/nvme0/docker/. /mnt/ext_relay/docker/ 2>/dev/null
+
+# 指定数据目录
+uci set dockerd.globals.data_root='/mnt/ext_relay/docker'
+uci commit dockerd
+/etc/init.d/dockerd start
+sleep 3
+
+docker info | grep -i 'docker root dir'     # 期望 /mnt/ext_relay/docker
+docker images && docker ps -a               # 镜像/容器还在
+```
+
+> 之后重启也不会被改（新版固件已无 `docker-dataroot` 自动改路径逻辑）。
+> 想放回 NVMe：`uci set dockerd.globals.data_root='/mnt/nvme0/docker'`。
+
+### K4.5 eMMC 剩余空间怎么用（推荐：留给 overlay，别急着分区）
+
+把 docker 放到 NVMe 后，eMMC 上还空着约 229 GiB。按「写入量」排序的建议：
+
+| 用途 | 写入强度 | 建议 |
+| --- | --- | --- |
+| **保持未分配（默认）** | 0 | ✅ **最推荐**。不分区就不磨损，将来需要时再划 |
+| **给 overlay 扩容**（`p3` 从 4 GiB → 8/16 GiB） | 中（装包/配置） | 想多装 iStore 应用时值得做；需要改构建参数重新出固件（见下） |
+| **小容量备份分区**（`p6` 8–16 GiB 放配置备份/固件） | 低（每周几次） | 可接受；用 `tar` 备份到那里，别放视频/下载 |
+| **共享盘 / 下载盘** | 高（大文件写入） | ❌ 不建议放 eMMC，交给 NVMe |
+| **swap** | 极高 | ❌ 不需要（本机 3.75 GiB 内存） |
+| **docker / HA 数据** | 高 | ❌ 已按建议放到 NVMe |
+
+**推荐组合**：
+
+- **NVMe（468 GiB）**：docker 数据目录 `/mnt/nvme0/docker`、HA 配置、iStore 应用数据、共享/下载；
+- **eMMC**：只承载系统（rootfs 200 MiB + overlay 4 GiB）；剩余空间先不分配；
+- 想扩 overlay 时，用 workflow 参数 `rootfs_data_size=8192`（需同步把构建里「分区表断言」从 4096 改成 8192）后重刷 —— 这属于换镜像，不是在线改分区。
+
+> 提示：eMMC 上**不建分区**就没有额外写入，是对寿命最友好的选择。真有备份需求，优先备份到 NVMe。
+
+### K5. iStore / 应用的数据位置
+
+| 对象 | 建议位置 | 设置方式 |
+| --- | --- | --- |
+| iStore 应用**程序** | `/overlay`（4 GiB，自动） | 无需设置 |
+| iStore 应用**数据** | `/mnt/data` | 商店「快速安装 → 存储位置」下拉里选 `/mnt/data` |
+| Home Assistant 配置 | `/mnt/data/Configs/HomeAssistant` | `ha-config-path` 自动选（≥1 GiB 的已挂载盘），也可在 HA 页面下拉里改 |
+
+检查：
+
+```sh
+df -h /overlay /mnt/data
+uci get istore.istore.last_path 2>/dev/null
+uci get homeassistant.@homeassistant[0].config_path 2>/dev/null
+```
+
+### K6. 建议顺手配好
+
+| 项 | 命令/位置 |
+| --- | --- |
+| 远程管理 | LuCI → 系统 → 管理权（SSH 已开 22） |
+| 终端 | LuCI → 系统 → TTYD 终端（`netstat -lnt \| grep 7681` 应为 `0.0.0.0:7681`） |
+| DDNS | LuCI → 服务 → 动态 DNS / DDNS-GO（已预装） |
+| 端口转发 | LuCI → 防火墙 → 端口转发（只在本机做一次，单层 NAT） |
+| DHCP 静态绑定 | LuCI → 网络 → DHCP/DNS → 静态地址（给 NAS/HA 固定 IP） |
+| 定时重启（可选） | LuCI → 系统 → 计划任务：`0 4 * * * reboot` |
+
+### K7. 收尾校验清单
+
+```sh
+firstboot-status                            # 8 项自检
+parted -s /dev/mmcblk0 print | tail -4      # 4/5/6 分区
+df -h /mnt/ext_relay /mnt/data /overlay
+docker info | grep -i 'docker root dir'
+uci show dockerd | grep data_root
+cat /etc/config/fstab | grep -E 'target|uuid'
+```
+
+### K8. 注意
+
+| 项 | 说明 |
+| --- | --- |
+| eMMC 寿命 | 50 GiB 分区跑 docker 可用，但写入较频繁；在意寿命可把 `data_root` 改到 NVMe |
+| 断电风险 | 分区表写入与 `mkfs` 期间断电可能留残；本手册的做法是「建表→重启→格式化」，窗口很短 |
+| 备份 | 配好后 LuCI 生成一次配置备份；升级勾「保留配置」即可沿用 |
+| 升级 | 以后刷同一基线的新版本，勾保留配置 → 分区、fstab、docker 路径都保留 |
