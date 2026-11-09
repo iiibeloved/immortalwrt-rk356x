@@ -4,7 +4,8 @@
 
 - **当前产物**：run [#42464195953](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42464195953) · Release [`g68-plus-2026.11.08-r25`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08-r25) · **556 个包**（含 DDNS）
 - **镜像 sha256**：`f41162a3a8c374c09fe1f2300a3d3c1b359be905b8e1e120a34ebedeca34d462`
-- 与上一版（549 包）差异：**+`kmod-fs-f2fs`、+`kmod-fs-xfs`、+`kmod-crypto-crc32`**（NTFS3 自 r12 起已内置）
+- **r27 起新增**：`luci-app-partexp`（分区/扩容/挂载界面）、`kmod-loop`、`f2fs-tools` → 预计 **559 个包**
+- 与更早版本（549 包）差异：+`kmod-fs-f2fs`、+`kmod-fs-xfs`、+`kmod-crypto-crc32`、+DDNS 5 包、+partexp 3 包
 
 ## 基线指纹
 
@@ -20,15 +21,15 @@
 | 文件 | sha256 |
 | --- | --- |
 | `files/etc/config/ttyd` | `43666e86f2bdbfaf953a3b09bfdbf9960e6e1fff4fcd7cb687d0d257e17433e2` |
-| `files/etc/init.d/ha-config-path` | `74e8f6e759f3cf9bc2f98d5a208a41fb24a370b3b451b077d0614f5cd4f27c13` |
-| `files/etc/init.d/nvme-automount` | `76c5f27a4c09320f94260c8cdf0ecbdeaab20c965b6fb3689e1dc1e726ee7c28` |
+| `files/etc/init.d/ha-config-path` | `e6e47aa65bbf02c94ce37593bae709cf8f8b3d374851e0512d4a3c1a80f30053` |
+| `files/etc/init.d/nvme-automount` | `5cc0155dc8d620f549bfdfea8e4ffa83c4cadae735c70a7bcfd871562650614b` |
 | `files/etc/opkg/distfeeds.conf` | `d7ab59f54676a07d47413bff28beb87b592166a7b0e63b7c2730ec54be2721b7` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |
 | `files/etc/uci-defaults/98-enable-custom-initd` | `56b8176538b6f8e5a145694563714e73d721dbcf99f32bf362efd750ce54b3b3` |
 | `files/etc/uci-defaults/98-fix-ttyd` | `3ea3fc0ba31c8f2efa3bf43422589a695bc5d713d3f78a144581986e0acc0f59` |
 | `files/etc/uci-defaults/99-opkg-istore` | `682b76bbad78f356a0aa8c0a294f4c44fd2b75b2210b93317c9b2afbea3847b0` |
 | `files/etc/uci-defaults/99-set-lan-ip` | `f48add100eb91cd175351357022cf76dbb4a68318471e2695cb98eca333208cd` |
-| `files/usr/bin/firstboot-status` | `4cfb24f997c6b47dd9f95c5e06fa7671d85b773675ab01f9e91bf77891a48c68` |
+| `files/usr/bin/firstboot-status` | `73f8ca3b7c2024982198a60b96bdd198577e695c94f5a2bc597161862b57e97a` |
 | `files/usr/libexec/istorec/homeassistant.sh` | `38e3be3269f5e86383022481a8ddb6eaeee1c9bbbb7fe1efd498f4085134cff7` |
 
 > 完整基线清单见 [`baseline.sha256`](baseline.sha256)，校验：`sha256sum -c docs/baseline.sha256`。
@@ -42,6 +43,12 @@
 | `luci-app-quickstart` | 向导式初始化：磁盘、网络、密码 | 0.12.10-r1 |
 | `luci-app-store` | iStore 应用商店 | 0.2.1-r1 |
 | `luci-theme-argon` | Argon 主题 | 2.4.3-r20250722 |
+
+### 分区工具
+
+| 包 | 作用 | 版本 |
+| --- | --- | --- |
+| `luci-app-partexp` | 一键格式化/扩容/挂载（sirpdboy） | 2.0.5-r20260318 |
 
 ### 文件共享 / 存储
 

@@ -4,15 +4,14 @@
 #
 #  行为(每次开机执行, 幂等):
 #    1) 枚举 /dev/nvme*n1 设备;
-#    2) 已有分区且文件系统受支持(ext4/xfs/btrfs/f2fs/exfat) -> 挂到 /mnt/nvmeX,
+#    2) 已有分区且文件系统受支持(ext4/xfs/btrfs/f2fs/exfat/ntfs3) -> 挂到 /mnt/nvmeX,
 #       以 UUID 写入 fstab, 之后由 block-mount 自动挂载;
 #    3) 磁盘完全空白(无分区表) -> **默认不格式化**, 只记录日志并跳过(保护盘内数据);
 #       确需自动建分区时, 手动 touch /etc/nvme-automount.format 再重启;
-#    4) 有分区但文件系统不支持(如 NTFS) -> 只记录日志, 不动数据、不格式化。
+#    4) 有分区但文件系统不支持 -> 只记录日志, 不动数据、不格式化。
 #
 #  开关(建在 /etc 下即可, 开机脚本读取):
 #    /etc/nvme-automount.off       完全关闭本功能
-#    /etc/nvme-automount.noformat  兼容旧版(现在默认就是只挂载、不格式化)
 #    /etc/nvme-automount.format    显式开启"空白盘自动建 GPT+ext4"(默认关闭, 慎用)
 #
 #  日志: /etc/nvme-automount.log ; logread | grep nvme-automount
@@ -26,10 +25,8 @@ STOP=10
 : "${LOG:=/etc/nvme-automount.log}"
 : "${MNTPREFIX:=/mnt}"   # 挂载点前缀(便于测试)
 : "${NVME_CLASS:=/sys/class/nvme}"
-: "${PENDDIR:=/etc}"   # NVMe 控制器 class 目录(便于测试覆盖)
 DRYRUN="${NVME_DRYRUN:-0}"
 OFF=/etc/nvme-automount.off
-NOFMT=/etc/nvme-automount.noformat
 MIN_BLANK_MIB=8192        # 小于 8 GiB 的空白盘不自动格式化
 SUPPORTED="ext4 xfs btrfs f2fs exfat ntfs3"
 

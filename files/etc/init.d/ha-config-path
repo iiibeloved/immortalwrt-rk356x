@@ -21,7 +21,6 @@ STOP=10
 
 : "${MOUNTS:=/proc/mounts}"
 : "${LOG:=/etc/ha-config.log}"
-: "${PENDING_DIR:=/etc/ha-pending}"   # 便于测试覆盖
 DRYRUN="${HA_DRYRUN:-0}"
 
 log() { echo "$(date '+%F %T') $*" >> "$LOG" 2>/dev/null; logger -t ha-config "$*" 2>/dev/null; }
