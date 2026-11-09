@@ -909,7 +909,7 @@ firstboot-status      # 8 项逐条 ✅/⏳，最后给「已就绪 / 仍在初�
 | --- | --- | --- |
 | 启用常驻脚本 + 首启执行 | `/etc/custom-initd.log` | `/etc/rc.d/S58docker-disk` 等符号链接存在 |
 | LAN 改址 | `/etc/lan-ip.log` | `uci get network.lan.ipaddr` = `192.168.100.1` |
-| TTYD 修复 | `/etc/ttyd-fix.log` | `netstat -lnt \| grep 7681` |
+| TTYD 修复 | `/etc/ttyd-fix.log` | 监听端口为 `0.0.0.0:7681`（`netstat -lnt` 可查） |
 | eMMC 拆盘 | `/etc/.docker-disk.log` | `/etc/.docker-disk.done`（末尾日志 `完成: …`） |
 | NVMe 挂载 | `/etc/nvme-automount.log` | `/proc/mounts` 中出现 `/mnt/nvme0` |
 | docker 数据目录 | `docker info` | `Docker Root Dir: /mnt/ext_relay/docker` |
@@ -1228,7 +1228,7 @@ uci get homeassistant.@homeassistant[0].config_path 2>/dev/null
 | 项 | 命令/位置 |
 | --- | --- |
 | 远程管理 | LuCI → 系统 → 管理权（SSH 已开 22） |
-| 终端 | LuCI → 系统 → TTYD 终端（`netstat -lnt \| grep 7681` 应为 `0.0.0.0:7681`） |
+| 终端 | LuCI → 系统 → TTYD 终端（`netstat -lnt` 应看到 `0.0.0.0:7681`） |
 | DDNS | LuCI → 服务 → 动态 DNS / DDNS-GO（已预装） |
 | 端口转发 | LuCI → 防火墙 → 端口转发（只在本机做一次，单层 NAT） |
 | DHCP 静态绑定 | LuCI → 网络 → DHCP/DNS → 静态地址（给 NAS/HA 固定 IP） |
