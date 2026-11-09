@@ -4,14 +4,14 @@
 
 - **当前产物**：run [#42549192377](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42549192377) · Release [`g68-plus-2026.11.09-r28`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.09-r28) · **563 个包**
 - **镜像 sha256**：`1238f46baf1b997f8166a969af1ff91e2150fc984f83d3880ca5bfc44732dd70`
-- **r28 起新增（7 个）**：`luci-app-partexp` + `luci-i18n-partexp-zh-cn`、`cfdisk`、`cgdisk`、`kmod-loop`、`f2fs-tools`、`f2fsck` → 共 **563 个包**（556 + 7）
+- **r28 起新增**：`luci-app-partexp` + 中文包、`cfdisk`、`cgdisk`、`kmod-loop`、`f2fs-tools`、`f2fsck`（563 包）；**下一版再 +`gdisk`、`sfdisk` → 预计 565 包**
 - 与更早版本（549 包）差异：+`kmod-fs-f2fs`、+`kmod-fs-xfs`、+`kmod-crypto-crc32`、+DDNS 5 包、+partexp 3 包
 
 ## 基线指纹
 
 | 文件 | sha256 |
 | --- | --- |
-| `defconfig/g68-plus-istoreos.config` | `32dffbc71e0dbf3bc6c2b6dce784232840a1fc52a3a5ae3b49186171531f8be8` |
+| `defconfig/g68-plus-istoreos.config` | `6720d04eee5bad51dfc3827511848c5dd01d53eae99b95f6062a68148f56f7e5` |
 | `.github/workflows/build-g68-plus-docker.yml` | `2a0429c522b2ba7bbb516bb8cc5879be11e761cd04a2f8991768eab354ec0226` |
 | `scripts/gen_image_generic.sh` | `f6d59494a9c88f5fe4e2175f00067eb5b5160a32b903b0a16f726a7b99903e98` |
 | 固件镜像 `*.img.gz` | `d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f` |

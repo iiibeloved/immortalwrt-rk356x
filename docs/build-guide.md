@@ -1324,6 +1324,7 @@ docker images && docker ps -a               # 镜像/容器还在
 | **`cfdisk`** | MBR 交互式（带 TUI） | 直观、适合新手；GPT 盘请用 `cgdisk` |
 | **`cgdisk`** | GPT 交互式（TUI） | 新建/删除 GPT 分区 |
 | `sfdisk` | 脚本化 MBR/GPT | 适合批量/备份分区表 |
+| `gdisk` | GPT 交互式 | GPT 专用（`sgdisk` 需要可另加） |
 | `luci-app-partexp` | LuCI 界面 | 一键格式化/扩容/挂载（K4.4） |
 
 > 注意：这些工具都**不会自动运行**，只在你在 SSH/LuCI 里手动执行时才生效。

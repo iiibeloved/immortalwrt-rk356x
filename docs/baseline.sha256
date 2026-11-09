@@ -1,6 +1,6 @@
 # 基线指纹（改动后请执行 scripts/update-baseline.sh 重新生成）
 # 校验: sha256sum -c docs/baseline.sha256
-32dffbc71e0dbf3bc6c2b6dce784232840a1fc52a3a5ae3b49186171531f8be8  defconfig/g68-plus-istoreos.config
+6720d04eee5bad51dfc3827511848c5dd01d53eae99b95f6062a68148f56f7e5  defconfig/g68-plus-istoreos.config
 2a0429c522b2ba7bbb516bb8cc5879be11e761cd04a2f8991768eab354ec0226  .github/workflows/build-g68-plus-docker.yml
 5990b8bb7bd53886743551e3a33a8de621bd77593c3379d237fdb632c1fbbcf2  .github/workflows/publish-release.yml
 f6d59494a9c88f5fe4e2175f00067eb5b5160a32b903b0a16f726a7b99903e98  scripts/gen_image_generic.sh
