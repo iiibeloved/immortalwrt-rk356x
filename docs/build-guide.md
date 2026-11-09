@@ -1360,6 +1360,53 @@ docker images && docker ps -a               # 镜像/容器还在
 
 > 提示：eMMC 上**不建分区**就没有额外写入，是对寿命最友好的选择。真有备份需求，优先备份到 NVMe。
 
+### K4.6 Docker 容器日志轮转（避免日志把盘写满）
+
+**r28 及更早版本默认不做轮转**：docker 默认日志驱动是 `json-file` 且没有 `max-size`，
+每个容器的日志会一直增长：
+
+```
+<mnt>/docker/containers/<容器ID>/<容器ID>-json.log
+```
+
+**新固件（下一版起）已内置** `/etc/docker/daemon.json`：
+
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" }
+}
+```
+
+效果：每个容器日志最多 **10 MiB × 3 个文件 = 30 MiB**，超出自动轮转删除最旧文件。
+
+**已在 r28 上运行的机器（手动加，立即生效于新容器）**
+
+```sh
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<'JSON'
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" }
+}
+JSON
+/etc/init.d/dockerd restart
+
+# 查看现有日志占用
+du -sh /mnt/nvme0/docker/containers/*/*-json.log 2>/dev/null | sort -h | tail -5
+```
+
+> ⚠️ `daemon.json` 的日志配置**只对之后新建的容器生效**；已存在的容器需要重建才会应用：
+> `docker rm -f <name>` 后重新 `docker run`（或用 `docker-apps.sh` 重跑）。
+
+**也可以按容器单独设**（不依赖全局配置）：
+
+```sh
+docker run -d --name app \
+  --log-opt max-size=10m --log-opt max-file=3 \
+  ...
+```
+
 ### K5. iStore / 应用的数据位置
 
 | 对象 | 建议位置 | 设置方式 |

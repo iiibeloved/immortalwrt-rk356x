@@ -21,6 +21,7 @@
 | 文件 | sha256 |
 | --- | --- |
 | `files/etc/config/ttyd` | `43666e86f2bdbfaf953a3b09bfdbf9960e6e1fff4fcd7cb687d0d257e17433e2` |
+| `files/etc/docker/daemon.json` | `f2ed05c6f5934a15f12571139bdc225804f67b8c83561cc39868f7b2296d2697` |
 | `files/etc/init.d/ha-config-path` | `e6e47aa65bbf02c94ce37593bae709cf8f8b3d374851e0512d4a3c1a80f30053` |
 | `files/etc/init.d/nvme-automount` | `5cc0155dc8d620f549bfdfea8e4ffa83c4cadae735c70a7bcfd871562650614b` |
 | `files/etc/opkg/distfeeds.conf` | `d7ab59f54676a07d47413bff28beb87b592166a7b0e63b7c2730ec54be2721b7` |
