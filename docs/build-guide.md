@@ -557,6 +557,52 @@ src/gz immortalwrt_telephony  .../releases/24.10.0/packages/aarch64_generic/tele
 **换镜像**：直接编辑 `/etc/opkg/distfeeds.conf` 的 URL，然后 `opkg update`。
 不要在快照固件上跑全量 `opkg upgrade`（快照包与 24.10.0 发布版不完全一致），只装需要的新包。
 
+#### 7.8.1 关于 `immortalwrt_kmods` 源为何被注释
+
+`/etc/opkg/distfeeds.conf` 里第 7 条被注释：
+
+```conf
+# src/gz immortalwrt_kmods https://downloads.immortalwrt.org/releases/24.10.1/targets/rockchip/armv8/kmods/6.6.86-1-422144fea623288f7402e1a9a15724c8/
+```
+
+原因：**内核 vermagic 不一致**
+
+| 项 | 值 |
+| --- | --- |
+| 该 kmods 源 | 内核 **6.6.86**-1-422144fea623288f7402e1a9a15724c8（且是 24.10.**1** 线） |
+| 本固件内核 | **6.6.99**~5ea661f7b6d7acc972ce0af4072e36b0-r1（fork 自编，24.10.**0** 线） |
+
+装了会报：
+
+```
+* pkg_hash_check_unresolved: cannot find dependency kernel (= 6.6.86-1-...)
+* kernel version mismatch
+```
+
+> `immortalwrt_core`（target 包源）里**也含** kmod 包，但它们同样是按发布内核编译的，
+> 所以从 core 源装 kmod 一样会因版本不匹配失败；非 kmod 的 target 包不受影响。
+
+**在设备上确认内核版本**
+
+```sh
+uname -r                                  # 6.6.99
+opkg list-installed | grep '^kernel '     # kernel - 6.6.99~<hash>-r1
+```
+
+**正确增加内核模块的方式（必须重编固件）**
+
+1. 在 `defconfig/g68-plus-istoreos.config` 末尾加一行（示例）：
+
+```conf
+CONFIG_PACKAGE_kmod-nf-tproxy=y
+```
+
+2. 触发构建（改 defconfig 会 push 触发，或手动 Run workflow）；
+3. 刷入新固件后用 `lsmod | grep nf_tproxy` 或 `opkg list-installed | grep nf-tproxy` 验证。
+
+**为什么不能靠 opkg 装**：kmod 与内核 ABI 强绑定，opkg 里的 kmod 都是基于官方发布内核编译的；
+自编内核只能把 kmod 一起编进镜像，否则无法加载。
+
 ### 7.9 NVMe 硬盘自动检测与挂载
 
 固件内置 `/etc/init.d/nvme-automount`（START=62，每次开机执行、幂等），自动处理 `/dev/nvme*n1`：
