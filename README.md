@@ -302,7 +302,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 
 ## 9. 刷机后首次配置（必做）
 
-> 详细步骤见 **[build-guide 附录 K](docs/build-guide.md)**，这里是要点顺序。
+> 完整分步（含 LuCI 菜单路径与命令）见 **[first-boot-checklist.md](docs/first-boot-checklist.md)**；要点顺序如下。
 
 1. **改密码**：`http://192.168.100.1`（root / 空密码）→ 系统 → 管理权 → 修改密码；顺手设时区 `Asia/Shanghai`；
 2. **确认上网**：`ping 223.5.5.5`、`opkg update`（WAN 默认 DHCP，接上级 LAN 即可）；
@@ -317,6 +317,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 | 文档 | 内容 |
 | --- | --- |
 | [docs/build-guide.md](docs/build-guide.md) | 详细教程：触发方式、25 步流程、产物、刷机、失败速查、13 个专题（加减包 / ss-rust / rootfs / docker 扩容 / 拆盘 / opkg 源 / NVMe / TTYD / 指示灯 / 回滚）+ 附录 A–E |
+| [docs/first-boot-checklist.md](docs/first-boot-checklist.md) | **刷完固件后的操作流程**（按重要程度：改密码 → 上网 → 磁盘/格式化/挂载 → docker 位置 → iStore → 备份，含 LuCI 菜单路径） |
 | [docs/packages.md](docs/packages.md) | 固件包清单（552 包 + 重点应用 + 基线指纹） |
 | [docs/ci-build.md](docs/ci-build.md) | 构建方案设计、依赖来源、实测记录 |
 | [docs/baseline.sha256](docs/baseline.sha256) | 基线指纹（CI 强校验依据） |
