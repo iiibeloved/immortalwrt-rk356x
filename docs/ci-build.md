@@ -36,7 +36,7 @@ defconfig/g68-plus-istoreos.config            # 附加配置片段（差异项�
 | --- | --- |
 | `workflow_dispatch` | 手动运行，可覆盖 `defconfig` / `extra_config` / `rootfs_size` / 是否上传 artifact |
 | `push`（`main`） | **仅当 `defconfig/` 下两个文件变动时**触发（改 workflow / docs 不重编，需要时手动 Run workflow） |
-| `schedule` | `0 18 * * 0`（UTC）= 每周一 02:00（Asia/Shanghai），用于跟踪 feeds / 插件更新 |
+| `schedule` | `0 18 * * 5`（UTC）= 每周六 02:00（Asia/Shanghai），用于跟踪 feeds / 插件更新 |
 
 `concurrency` 已设置但 `cancel-in-progress: false`，避免一次 3 小时的编译被后续提交打断。
 
@@ -193,7 +193,7 @@ d4a1908a71dc8b7977eb626b07b0f291b575cc35b3958757b58aaec56eeba41d
   此时会自动回到「工具链 → 修 rust vendor → 编 rust」的路径（rustc + LLVM，约 +2 小时）。
   其余 20 个 iStoreOS 相关包不受影响；校验步骤的表格里会显示 `⛔ 已按预期关闭` / `⚠️ 预期关闭但仍启用`。
 - `dl/` 与 `.ccache/` 已被 `actions/cache` 缓存，二次构建的下载与 C 编译会明显加快。
-- 定时任务每周一 02:00 会自动重编，用于跟踪 feeds / 插件更新。
+- 定时任务每周六 02:00 会自动重编，用于跟踪 feeds / 插件更新。
 
 
 ## 10. 自动发布 Release（免登录直链）

@@ -11,7 +11,7 @@
 
 | 事项 | 值 |
 | --- | --- |
-| 下次构建 | **每周一 02:00 CST**（cron `0 18 * * 0`，UTC 周日 18:00）；也可随时手动 Run workflow |
+| 下次构建 | **每周六 02:00 CST**（cron `0 18 * * 5`，UTC 周五 18:00）；也可随时手动 Run workflow |
 | 想提前编 | Actions → `Build G68-PLUS (iStoreOS style)` → **Run workflow** |
 | 预计耗时 | **约 4 小时 15 分**（基线保留 ss-rust；关闭 ss-rust 可降到约 2.5 小时） |
 | 单次超时上限 | 350 分钟（workflow 内 `timeout-minutes`，GitHub 硬上限 360） |
@@ -26,7 +26,7 @@
 
 ### 1.1 定时构建（默认，无需操作）
 
-- workflow 内 `schedule: cron "0 18 * * 0"` → **每周一 02:00（北京时间）** 自动跑。
+- workflow 内 `schedule: cron "0 18 * * 5"` → **每周六 02:00（北京时间）** 自动跑。
 - 注意：**GitHub 的 cron 一律按 UTC 解释**，改时间时记得 -8 小时。
 - 注意：仓库 **60 天无任何提交活动**，GitHub 会自动停用定时任务（页面会提示 `Disabled`），
   届时去 Actions 页面点一次 **Enable workflow** 即可。
@@ -89,7 +89,7 @@ gh run list --repo iiibeloved/immortalwrt-rk356x --limit 3
 | 手动 Run workflow | ✅ |
 | push 改动 `defconfig/g68-plus-docker.config` 或 `defconfig/g68-plus-istoreos.config` | ✅ |
 | push 改动 `.github/workflows/*.yml` 或 `docs/*` | ❌（故意如此，避免改文档就重编 2.5 小时） |
-| 每周一 02:00 定时 | ✅ |
+| 每周六 02:00 定时 | ✅ |
 
 ---
 
@@ -138,7 +138,7 @@ GH_TOKEN=<token> python3 scripts/watch_build.py --no-wait        # 只看当前�
 输出内容：run 状态 / 失败步骤 / Release tag 与大小 / 镜像 sha256 / **565 包核对**（gdisk、sfdisk、partexp…）/
 **4 条下载链接**（GitHub 直链 + `gh-proxy` + `ghfast.top` + `ghproxy.net`）。
 
-配套：本仓库已设**每周一 02:45 的定时任务**，会自动确认（必要时手动触发）当周构建、挂上 watcher，
+配套：本仓库已设**每周六 02:45 的定时任务**，会自动确认（必要时手动触发）当周构建、挂上 watcher，
 并在结束后更新 `docs/packages.md`（包数 / sha256）后把链接与核对结果发出来。
 
 ## 3. 怎么看进度 / 怎么判断成功
@@ -712,7 +712,7 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
    下次仍要重新拉 feeds 与重编。要停就等它跑完，或者接受缓存损失。
 2. **同一时间只跑一个构建**：`concurrency` 已设为不自动取消，两个构建同时跑会互相吃 IO，
    且都拿不到缓存收益（workflow 里 key 带 `run_id`，不会互相覆盖，但重复劳动）。
-3. **cron 是 UTC**：`0 18 * * 0` = 周一 02:00 北京时间，不是周日 18:00 北京时间。
+3. **cron 是 UTC**：`0 18 * * 5` = 周六 02:00 北京时间，不是周五 18:00 北京时间。
 4. **60 天无活动会停用定时任务**：GitHub 的政策，需手动 Enable workflow。
 5. **不要手改 runner 上的 `.config`**：配置的唯一来源是仓库里的两个 defconfig 文件；
    手改只对当次有效，且会被下一次 `make defconfig` 归一化覆盖。
@@ -740,7 +740,7 @@ gh release delete g68-plus-2026.11.06 --repo iiibeloved/immortalwrt-rk356x --cle
 - [ ] 确认没有正在运行的构建（避免并发）
 - [ ] 决定 `rootfs_size`（默认 **200**，与 fork 一致；看 Job Summary 占用率，>85% 告警就调到 256/512）与 `rootfs_data_size`（默认 **4096**）
 - [ ] 决定是否 `publish_release`（默认 true）
-- [ ] 触发方式：等周一 02:00 定时 / 或手动 Run workflow
+- [ ] 触发方式：等周六 02:00 定时 / 或手动 Run workflow
 - [ ] 构建结束后：看 Job Summary 的包表格 → 下载 artifact 或 Release → 校验 sha256 → 刷机
 
 

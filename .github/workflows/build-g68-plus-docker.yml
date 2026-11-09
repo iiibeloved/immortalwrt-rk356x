@@ -10,7 +10,7 @@
 #
 #  触发   : 1) Actions → Run workflow (可改 defconfig / 附加配置 / rootfs 大小)
 #           2) push 到 main, 且改动 defconfig/ 或本文件
-#           3) 每周一 02:00 (Asia/Shanghai) 定时重编, 跟踪 feeds 与插件更新
+#           3) 每周六 02:00 (Asia/Shanghai) 定时重编, 跟踪 feeds 与插件更新
 #
 #  产物   : Actions run 页面底部 Artifacts
 #           immortalwrt-g68-plus-<run_number>.zip
@@ -63,8 +63,8 @@ on:
       - "defconfig/g68-plus-docker.config"
       - "defconfig/g68-plus-istoreos.config"
   schedule:
-    # 每周日 18:00 UTC = 每周一 02:00 Asia/Shanghai
-    - cron: "0 18 * * 0"
+    # 每周五 18:00 UTC = 每周六 02:00 Asia/Shanghai
+    - cron: "0 18 * * 5"
 
 concurrency:
   group: build-g68-plus-${{ github.ref }}
