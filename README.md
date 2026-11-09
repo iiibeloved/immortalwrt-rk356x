@@ -277,7 +277,7 @@ gunzip -k "$FILE"
 sudo dd if="${FILE%.gz}" of=/dev/sdX bs=4M conv=fsync status=progress   # /dev/sdX 换成你的设备
 ```
 
-也可在 LuCI「系统 → 备份/升级」直接上传 `.img.gz`（sysupgrade 升级会保留 overlay 配置；
+也可在 LuCI「系统 → 备份/升级」直接上传 `.img.gz`。**进不去系统 / 首次刷写**时用 USB maskrom 方式（RKDevTool + 双公头线，详见 [build-guide 4.5](docs/build-guide.md)）。（sysupgrade 升级会保留 overlay 配置；
 首刷若要不带旧配置，请勾掉「保留配置」）。
 
 ---
