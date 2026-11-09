@@ -81,6 +81,7 @@ env:
   # wolplus / rtbwmon / webdav2 等 iStoreOS 生态插件
   FEED_SMALL: "src-git small https://github.com/kenzok8/small-package.git;main"
   # 单包仓库 (以本地 package/ 方式引入, 不作为 feed 全量索引)
+  PKG_PARTEXP_URL: https://github.com/sirpdboy/luci-app-partexp
   PKG_FILETRANSFER_URL: https://github.com/DustReliant/luci-app-filetransfer.git
 
   CONFIG_FILE: ${{ github.event.inputs.defconfig || 'defconfig/g68-plus-docker.config' }}
@@ -220,6 +221,24 @@ jobs:
           else
             echo "::warning::luci-app-filetransfer 拉取失败, 该包将被跳过"
             rm -rf package/luci-app-filetransfer
+          fi
+
+      - name: 引入 luci-app-partexp (本地单包, sirpdboy)
+        run: |
+          set -u
+          if git clone --depth 1 "$PKG_PARTEXP_URL" /tmp/partexp-src; then
+            mkdir -p package
+            # 仓库结构: 根目录/luci-app-partexp/ 才是包本体
+            if [ -d /tmp/partexp-src/luci-app-partexp ]; then
+              cp -a /tmp/partexp-src/luci-app-partexp package/luci-app-partexp
+            else
+              cp -a /tmp/partexp-src package/luci-app-partexp
+            fi
+            rm -rf package/luci-app-partexp/.git
+            echo "== luci-app-partexp 已放入 package/ (版本: $(grep -m1 '^PKG_VERSION' package/luci-app-partexp/Makefile | cut -d= -f2))"
+          else
+            echo "::warning::luci-app-partexp 拉取失败, 该包将被跳过"
+            rm -rf package/luci-app-partexp /tmp/partexp-src
           fi
 
       # ---------------------------------------------------------------------

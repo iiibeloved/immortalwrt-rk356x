@@ -10,8 +10,8 @@
 
 | 文件 | sha256 |
 | --- | --- |
-| `defconfig/g68-plus-istoreos.config` | `496aa505c0c2de1585a9a6fe27c50d1a3a28a5e7ab7b92d5c6ce571aed487794` |
-| `.github/workflows/build-g68-plus-docker.yml` | `fbee12124d69d9b51fb6a6279360f1a9440133720de7f0bbe2bf5f01280bcd21` |
+| `defconfig/g68-plus-istoreos.config` | `f5880b30d705911dbc37fd3dc4758d9cfd4a62ff19738d072d143fc867e7f5ba` |
+| `.github/workflows/build-g68-plus-docker.yml` | `2a0429c522b2ba7bbb516bb8cc5879be11e761cd04a2f8991768eab354ec0226` |
 | `scripts/gen_image_generic.sh` | `f6d59494a9c88f5fe4e2175f00067eb5b5160a32b903b0a16f726a7b99903e98` |
 | 固件镜像 `*.img.gz` | `d0dc8eb943aedf9614690a6dc3e512709360d83926d406c80653ad0fd312fa2f` |
 
@@ -20,12 +20,11 @@
 | 文件 | sha256 |
 | --- | --- |
 | `files/etc/config/ttyd` | `43666e86f2bdbfaf953a3b09bfdbf9960e6e1fff4fcd7cb687d0d257e17433e2` |
-| `files/etc/init.d/bootled` | `15dee947ad93822728c81f1aefff1a63eea9806209819132da1044226bf8b225` |
 | `files/etc/init.d/ha-config-path` | `74e8f6e759f3cf9bc2f98d5a208a41fb24a370b3b451b077d0614f5cd4f27c13` |
 | `files/etc/init.d/nvme-automount` | `76c5f27a4c09320f94260c8cdf0ecbdeaab20c965b6fb3689e1dc1e726ee7c28` |
 | `files/etc/opkg/distfeeds.conf` | `d7ab59f54676a07d47413bff28beb87b592166a7b0e63b7c2730ec54be2721b7` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |
-| `files/etc/uci-defaults/98-enable-custom-initd` | `7188e3a2bc525c10d869a259403ef0d473795dd7e9711cca0333743cf1a58f64` |
+| `files/etc/uci-defaults/98-enable-custom-initd` | `56b8176538b6f8e5a145694563714e73d721dbcf99f32bf362efd750ce54b3b3` |
 | `files/etc/uci-defaults/98-fix-ttyd` | `3ea3fc0ba31c8f2efa3bf43422589a695bc5d713d3f78a144581986e0acc0f59` |
 | `files/etc/uci-defaults/99-opkg-istore` | `682b76bbad78f356a0aa8c0a294f4c44fd2b75b2210b93317c9b2afbea3847b0` |
 | `files/etc/uci-defaults/99-set-lan-ip` | `f48add100eb91cd175351357022cf76dbb4a68318471e2695cb98eca333208cd` |

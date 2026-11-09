@@ -1115,6 +1115,17 @@ docker images && docker ps -a               # 镜像/容器还在
 > 之后重启也不会被改（新版固件已无 `docker-dataroot` 自动改路径逻辑）。
 > 想放回 NVMe：`uci set dockerd.globals.data_root='/mnt/nvme0/docker'`。
 
+### K4.4 用 luci-app-partexp 做分区/扩容（可选，界面化）
+
+固件已内置 `luci-app-partexp`（sirpdboy，v2.0.5），LuCI → **系统 → 分区管理**（PartExp）：
+
+- 可对空闲空间/已有分区做**格式化、扩容（resize2fs）、挂载**；
+- 依赖已内置：`fdisk`、`parted`、`e2fsprogs`、`resize2fs`、`btrfs-progs`、`f2fs-tools`、`losetup`、`kmod-loop`、`bc`、`blkid`；
+- 它**不会在开机自动运行**，只在你在界面点按钮时操作，安全；
+- 扩容 `overlay` 需要重启；扩容数据分区（ext4）可在挂载状态下执行（`resize2fs`）。
+
+> 与「手动 parted」等价，二选一即可；两者都不要在断电风险高的环境下操作。
+
 ### K4.5 eMMC 剩余空间怎么用（推荐：留给 overlay，别急着分区）
 
 把 docker 放到 NVMe 后，eMMC 上还空着约 229 GiB。按「写入量」排序的建议：
