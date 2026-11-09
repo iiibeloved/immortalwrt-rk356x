@@ -212,6 +212,93 @@ https://github.com/iiibeloved/immortalwrt-rk356x/releases/download/<tag>/immorta
 
 刷完本仓库固件后请按 **`http://192.168.100.1`** 访问，不要照厂商文档用 192.168.1.1。
 
+## 4.6 `dd` 方式刷写：适用前提与具体命令
+
+> 结论先说：**`dd` 只能用于「目标存储能被电脑识别为块设备」的场景**。
+> 本机 eMMC 是**焊死**的，机器起不来时电脑看不到它 —— 那种情况只能用 **maskrom（4.5 节）**。
+
+### 4.6.1 `dd` 能用的三种场景
+
+| 场景 | 目标设备 | 说明 |
+| --- | --- | --- |
+| 写 **SD / TF 卡** | `/dev/sdX`（读卡器） | 做启动卡、或用 SD 启动后救 eMMC |
+| eMMC **拆焊后放读卡器**（BGA 转 USB） | `/dev/sdX` | 需要焊接工具，风险高 |
+| 板子能启动到**另一套系统**（SD/USB 上的 Linux），再写 eMMC | 板内 `/dev/mmcblk0` | 例如从 SD 启动后写 eMMC |
+
+### 4.6.2 命令（在 Linux 主机上）
+
+```bash
+# 0) 先确认目标设备（这一步错了会写坏你的硬盘！）
+lsblk -o NAME,SIZE,MODEL,MOUNTPOINT
+# 假设目标 SD 卡/读卡器是 /dev/sdb
+
+# 1) 校验镜像（务必）
+sha256sum -c sha256sums --ignore-missing
+
+# 2) 写入（img.gz 要先解压）
+gunzip -k immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img.gz
+sudo dd if=immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img \
+        of=/dev/sdb bs=4M conv=fsync status=progress
+sync
+
+# 3) 校验写入结果
+sudo fdisk -l /dev/sdb            # 应看到 p1(16M)/p2(200M)/p3(4096M) 三段
+sudo partprobe /dev/sdb || true
+```
+
+> `bs=4M conv=fsync status=progress` 是推荐参数；**不要**省略 `conv=fsync`，否则可能没落盘。
+> Windows 上等价工具：**balenaEtcher** / **Rufus（DD 模式）**。
+
+### 4.6.3 板内写 eMMC（从 SD/USB 启动时）
+
+```sh
+# 在板上执行（此时系统不在 eMMC 上运行）
+lsblk                              # 确认 eMMC 是 /dev/mmcblk0
+dd if=/tmp/xxx.img of=/dev/mmcblk0 bs=4M conv=fsync
+sync && reboot
+```
+
+⚠️ 若当前系统**正是从 eMMC 运行**，不要对 `/dev/mmcblk0` 做 `dd`：会覆盖正在使用的分区。
+这种情形请用 **LuCI sysupgrade**（只写 kernel/rootfs，保留分区与配置）。
+
+### 4.6.4 机器没固件 / 起不来时，`dd` 用不了怎么办
+
+因为 eMMC 焊死、无系统可跑，电脑也看不到该 eMMC，所以：
+
+| 手段 | 是否可行 |
+| --- | --- |
+| 电脑 `dd` 到 eMMC | ❌（看不到设备，除非拆焊/有专用读卡器） |
+| **USB maskrom + RKDevTool 图形工具** | ✅ 厂商方案，见 4.5 节 |
+| **maskrom + 命令行工具**（Linux） | ✅ 等价做法，见下 |
+
+命令行等价（Linux，装好 `rkdeveloptool`）：
+
+```bash
+# 1) 让板子进入 maskrom（短接或按住 Reset 上电），确认被识别
+lsusb | grep -i rockchip          # 应出现 Rockchip 设备
+sudo rkdeveloptool ld             # 列出设备
+
+# 2) 加载 loader（先用厂商给的 rk356x_spl_loader_v1.21.113.bin）
+sudo rkdeveloptool db rk356x_spl_loader_v1.21.113.bin
+
+# 3) 写整盘镜像（等价于 dd 到 LBA0）
+sudo rkdeveloptool ul immortalwrt-rockchip-armv8-nsy_g68-plus-squashfs-sysupgrade.img
+
+# 4) 复位重启
+sudo rkdeveloptool rd
+```
+
+> 若你用 `upgrade_tool`（瑞芯微另一套 CLI）：`upgrade_tool db loader.bin` → `upgrade_tool ul xxx.img` → `upgrade_tool rd`。
+> 两者都需要**厂商 loader**（DDR 初始化文件），没有 loader 无法在 maskrom 下写入。
+
+### 4.6.5 小结（选哪种）
+
+| 你的处境 | 用什么 |
+| --- | --- |
+| 系统能进 LuCI/SSH | **LuCI sysupgrade**（最安全，保留配置） |
+| 要做 SD 启动卡 | **dd / balenaEtcher** 写卡 |
+| 系统起不来 / 全新 eMMC | **USB maskrom（RKDevTool 或 rkdeveloptool）** |
+
 ## 5. 刷机步骤（务必核对 sha256）
 
 ```bash
