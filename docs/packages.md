@@ -2,9 +2,9 @@
 
 > 由构建产物 `immortalwrt-rockchip-armv8-nsy_g68-plus.manifest` 直接生成，非手写。
 
-- **当前产物**：run [#42464195953](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42464195953) · Release [`g68-plus-2026.11.08-r25`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.08-r25) · **556 个包**（含 DDNS）
-- **镜像 sha256**：`f41162a3a8c374c09fe1f2300a3d3c1b359be905b8e1e120a34ebedeca34d462`
-- **r27 起新增**：`luci-app-partexp`（分区/扩容/挂载界面）、`kmod-loop`、`f2fs-tools`、`cfdisk`、`cgdisk` → 预计 **561 个包**
+- **当前产物**：run [#42549192377](https://github.com/iiibeloved/immortalwrt-rk356x/actions/runs/42549192377) · Release [`g68-plus-2026.11.09-r28`](https://github.com/iiibeloved/immortalwrt-rk356x/releases/tag/g68-plus-2026.11.09-r28) · **563 个包**
+- **镜像 sha256**：`1238f46baf1b997f8166a969af1ff91e2150fc984f83d3880ca5bfc44732dd70`
+- **r28 起新增（7 个）**：`luci-app-partexp` + `luci-i18n-partexp-zh-cn`、`cfdisk`、`cgdisk`、`kmod-loop`、`f2fs-tools`、`f2fsck` → 共 **563 个包**（556 + 7）
 - 与更早版本（549 包）差异：+`kmod-fs-f2fs`、+`kmod-fs-xfs`、+`kmod-crypto-crc32`、+DDNS 5 包、+partexp 3 包
 
 ## 基线指纹
