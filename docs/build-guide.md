@@ -498,7 +498,27 @@ docker info | grep -i 'docker root dir'      # 期望 /mnt/ext_relay/docker
 `lsblk` 中 **fssize > 1 GiB 且有挂载点** 的分区（例如你手动挂好的 `/mnt/data`、`/mnt/nvme0`），
 选哪个就用哪个；不选则用 `quickstart` 的默认目录。程序本体仍装进 `/overlay`（见[附录 F](#附录-f-存储分布与安装位置docker--istore)）。
 
-### 7.8 内置 opkg 软件源（官方 + iStoreOS，刷完即用）
+### 7.8 内置 opkg 软件源与全局配置（刷完即用）
+
+固件内置 `/etc/opkg.conf`（**默认注释掉 `option check_signature`**，即不校验签名）与 `/etc/opkg/distfeeds.conf`：
+
+```conf
+# /etc/opkg.conf 关键行
+dest root /
+lists_dir ext /var/opkg-lists
+option overlay_root /overlay
+#option check_signature          ← 默认注释，避免 iStoreOS 源持续报签名失败
+
+arch all 1
+arch noarch 1
+arch aarch64_generic 10
+arch aarch64_cortex-a53 5        ← iStoreOS nas 源(按 cortex-a53 编译)
+```
+
+> LuCI 里可在 **系统 → 软件包 → 配置 opkg** 直接看到并修改这个文件。
+> 想恢复严格校验：去掉 `#option check_signature` 的 `#`，并注释掉 `distfeeds.conf` 里的三条 iStoreOS 源（官方源签名正常）。
+
+**软件源列表（`distfeeds.conf`）**
 
 镜像内置 `files/etc/opkg/distfeeds.conf`，刷完开机即生效，**不用再手动粘贴地址**。分两组：
 
