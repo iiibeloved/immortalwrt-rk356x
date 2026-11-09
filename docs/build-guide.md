@@ -93,35 +93,37 @@ gh run list --repo iiibeloved/immortalwrt-rk356x --limit 3
 
 ---
 
-## 2. 编译过程（24 个步骤，按实际执行顺序）
+## 2. 编译过程（25 个步骤，按实际执行顺序）
 
 | # | 步骤 | 参考耗时 | 说明 |
 | --- | --- | --- | --- |
 | 1 | 释放磁盘空间 | 1–3 min | 删 runner 上的 dotnet/Android SDK 等 |
 | 2 | 检出源码 | <1 min | `fetch-depth: 1` |
 | 3 | 修正内置脚本的可执行位 | <1 min | `files/` 下脚本 `chmod +x` 兜底 |
-| 4 | 校验配置并打印目标 | <1 min | defconfig 不存在直接 fail-fast |
+| 4 | 校验配置并打印目标 | <1 min | defconfig 不存在直接 fail-fast；含基线指纹强校验 |
 | 5 | 安装编译依赖 | 2–10 min | 含 `python3-pyelftools`（RK3568 u-boot 必需） |
-| 6–7 | 生成 feeds.conf / 安装官方 4 源 | 3–8 min | packages/luci/routing/telephony 全量 |
-| 8 | 引入第三方 feed 并选择性安装 | 2–3 min | `kenzok8/small-package` 只按名装需要的包 |
-| 9 | 引入 `luci-app-filetransfer`（本地包） | <1 min | 第三方单包，直连 clone |
-| 10 | 应用 defconfig + 附加配置 | <1 min | 追加 + `make defconfig` + **强制关闭 pass** |
-| 11 | 校验宿主机依赖（`make prereq`） | 1–2 min | 提前暴露 pyelftools 类问题 |
-| 12 | 校验附加包是否生效 | <1 min | Job Summary 表格 ✅ / ⚠️ / ⛔ |
-| 13 | 缓存 dl 与 ccache | <1 min | 命中缓存显著提速 |
-| 14 | 下载软件包源码 | 1–13 min | `make download`，命中缓存时很快 |
-| 15 | 构建工具链（tools + toolchain） | 22–35 min | 产出 `aarch64-openwrt-linux-musl-gcc` |
-| 16 | 修复 rust vendor 校验并预编译 rust host | **80–120 min**（保留 ss-rust 时） | 关掉 ss-rust 则整步跳过 |
-| 17 | 编译固件（`make world` 剩余部分） | 45–75 min | 内核 + u-boot/ATF + 550+ 包 + 镜像 |
-| 18 | 记录 rootfs 占用 | <1 min | 打印 squashfs 实际大小，≥85% 告警 |
-| 19 | 校验镜像分区表 | <1 min | 断言 MBR 为 `16 / 200 / 4096`，不符直接失败 |
-| 20 | 收集固件 | <1 min | 拷到 `output/` |
-| 21 | 上传固件 artifact | 1–2 min | 约 165–200 MB |
-| 22 | 发布到 Release | 1–2 min | tag `g68-plus-YYYY.MM.DD`，含 `.img.gz` + `sha256sums` |
-| 23 | 构建失败时自动开 issue | 0 | 仅失败时执行，见 3.1 |
-| 24 | 上传编译日志 | 0 | 仅失败时执行（`build.log` 等 4 个） |
+| 6 | 生成 feeds.conf (官方 4 源) | <1 min | packages/luci/routing/telephony |
+| 7 | 更新并安装官方 feeds | 1–8 min | 全量安装官方源 |
+| 8 | 引入第三方 feed 并选择性安装 | 2–3 min | `kenzok8/small-package` 按名装包 |
+| 9 | 引入 luci-app-filetransfer (本地单包) | <1 min | 直连 clone 到 `package/` |
+| 10 | 引入 luci-app-partexp (本地单包, sirpdboy) | <1 min | 直连 clone 到 `package/`（分区/扩容工具） |
+| 11 | 应用 defconfig 与附加配置 | <1 min | 追加 + `make defconfig` + 强制关闭 pass |
+| 12 | 校验宿主机依赖 (make prereq) | 1–2 min | 提前暴露 pyelftools 类问题 |
+| 13 | 校验附加包是否生效 | <1 min | Job Summary 表格 ✅/⚠️/⛔ |
+| 14 | 缓存 dl 与 ccache | <1 min | 命中缓存显著提速 |
+| 15 | 下载软件包源码 | 1–13 min | `make download` |
+| 16 | 构建工具链 (tools + toolchain) | 22–37 min | 产出 `aarch64-openwrt-linux-musl-gcc` |
+| 17 | 修复 rust vendor 校验并预编译 rust host | 80–126 min | 保留 ss-rust 时；关闭则整步跳过 |
+| 18 | 编译固件 | 45–82 min | 内核 + u-boot/ATF + 550+ 包 + 镜像 |
+| 19 | 记录 rootfs 占用 (squashfs 实际大小) | <1 min | ≥85% 告警 |
+| 20 | 校验镜像分区表 | <1 min | 断言 MBR 为 `16 / 200 / 4096` |
+| 21 | 收集固件 | <1 min | 拷到 `output/` |
+| 22 | 上传固件 artifact | 1–2 min | 约 165–200 MB |
+| 23 | 发布到 Release (免登录直链) | 1–2 min | tag `g68-plus-YYYY.MM.DD`，含 sha256sums |
+| 24 | 构建失败时自动开 issue | 0 | 仅失败时 |
+| 25 | 上传编译日志 (仅失败时) | 0 | 仅失败时 |
 
-**总时长参考**：保留 ss-rust（当前基线）**≈ 3.5–4 小时**；关掉 ss-rust 可降到 **≈ 2.5 小时**。
+**总时长参考**：保留 ss-rust（基线）**≈ 3.5–4 小时**；关掉 ss-rust 可降到 **≈ 2.5 小时**。
 
 ## 3. 怎么看进度 / 怎么判断成功
 

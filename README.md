@@ -167,7 +167,7 @@ docker info | grep -i 'docker root dir'
 
 > 临时试验请**显式传参**，不要改默认值；同日多次构建会自动加 `-r<run_number>` 后缀并存。
 
-### 5.2 流水线（24 步，关键闸门）
+### 5.2 流水线（25 步，关键闸门）
 
 ```
 释放空间 → 检出源码 → chmod 内置脚本 → 校验配置(+ 基线强校验) → 装依赖
@@ -316,7 +316,7 @@ sha256sum -c docs/baseline.sha256        # 全部 OK = 仓库仍在基线状态
 
 | 文档 | 内容 |
 | --- | --- |
-| [docs/build-guide.md](docs/build-guide.md) | 详细教程：触发方式、24 步流程、产物、刷机、失败速查、13 个专题（加减包 / ss-rust / rootfs / docker 扩容 / 拆盘 / opkg 源 / NVMe / TTYD / 指示灯 / 回滚）+ 附录 A–E |
+| [docs/build-guide.md](docs/build-guide.md) | 详细教程：触发方式、25 步流程、产物、刷机、失败速查、13 个专题（加减包 / ss-rust / rootfs / docker 扩容 / 拆盘 / opkg 源 / NVMe / TTYD / 指示灯 / 回滚）+ 附录 A–E |
 | [docs/packages.md](docs/packages.md) | 固件包清单（552 包 + 重点应用 + 基线指纹） |
 | [docs/ci-build.md](docs/ci-build.md) | 构建方案设计、依赖来源、实测记录 |
 | [docs/baseline.sha256](docs/baseline.sha256) | 基线指纹（CI 强校验依据） |
