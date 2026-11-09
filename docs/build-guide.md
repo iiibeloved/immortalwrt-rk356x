@@ -125,6 +125,22 @@ gh run list --repo iiibeloved/immortalwrt-rk356x --limit 3
 
 **总时长参考**：保留 ss-rust（基线）**≈ 3.5–4 小时**；关掉 ss-rust 可降到 **≈ 2.5 小时**。
 
+### 2.1 构建结束后自动收尾（watcher）
+
+`scripts/watch_build.py` 会跟随一次构建直到结束，并输出完整报告：
+
+```bash
+GH_TOKEN=<token> python3 scripts/watch_build.py                  # 跟最新 run
+GH_TOKEN=<token> python3 scripts/watch_build.py --run-id 123456  # 跟指定 run
+GH_TOKEN=<token> python3 scripts/watch_build.py --no-wait        # 只看当前状态
+```
+
+输出内容：run 状态 / 失败步骤 / Release tag 与大小 / 镜像 sha256 / **565 包核对**（gdisk、sfdisk、partexp…）/
+**4 条下载链接**（GitHub 直链 + `gh-proxy` + `ghfast.top` + `ghproxy.net`）。
+
+配套：本仓库已设**每周一 02:45 的定时任务**，会自动确认（必要时手动触发）当周构建、挂上 watcher，
+并在结束后更新 `docs/packages.md`（包数 / sha256）后把链接与核对结果发出来。
+
 ## 3. 怎么看进度 / 怎么判断成功
 
 - run 列表：<https://github.com/iiibeloved/immortalwrt-rk356x/actions>
