@@ -187,7 +187,7 @@ https://github.com/iiibeloved/immortalwrt-rk356x/releases/download/<tag>/immorta
 | 方式 | 操作 |
 | --- | --- |
 | A. 短接法 | 断电 → 双公头 USB 插板子 USB 口与电脑 → 短接板上两个短接点 → 通电 |
-| B. 复位键法 | 断电 → **按住 Reset 不松** → 插电源 → 直到 RKDevTool 显示「发现设备」→ 在「高级功能」点 **进入 maskrom** |
+| B. 复位键法（**无需拆 SPI、无需短接**） | 断电 → **按住 Reset 不松** → 同时插电源 → 直到 RKDevTool 显示「发现设备」→ 在「高级功能」点 **进入 maskrom** |
 
 > 未提示进入 maskrom，通常是**驱动没装好**。
 
@@ -198,9 +198,9 @@ https://github.com/iiibeloved/immortalwrt-rk356x/releases/download/<tag>/immorta
 3. **获取当前存储**：
    - 显示为 **SPI**（板上有 SPI flash）→ 点 **擦除所有** 清空 SPI；
    - 否则点 **EMMC / 切换存储** 到 eMMC → **擦除所有**；
-   - 进度到 100% 才算成功（若秒完成，说明 eMMC 可能有问题）；
+   - 进度到 **100%** 才算成功；**若「秒完成」，说明 eMMC 可能有问题，需要检查**；
 4. 回到工具栏第一个页签 **下载镜像（Download Image）** → 选择**解压后的 `.img`** → 执行写入；
-5. 完成后接网线，网口灯亮即表示已启动。
+5. 完成后接网线，**网口灯亮**即表示已启动（可直接访问管理页）。
 
 ### 4.5.4 ⚠️ 厂商文档里的默认地址与本仓库固件不同
 
