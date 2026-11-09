@@ -131,7 +131,7 @@ docker info | grep -i 'docker root dir'
 | **商店 / 初始化** | `luci-app-store`（iStore）+ `luci-app-quickstart`（向导：磁盘、网络、密码）+ `luci-lib-taskd` / `taskd` |
 | **容器** | `dockerd` / `containerd` / `runc` / `docker` + `luci-app-dockerman`；数据目录自动落 `/mnt/ext_relay/docker` |
 | **共享** | `samba4-server` + `luci-app-samba4`、`unishare`（samba4 + webdav2 聚合面板）、`nfs-kernel-server` + `luci-app-nfs`、`cifsmount` + `kmod-fs-cifs` + `luci-app-cifs-mount` |
-| **分区工具** | `luci-app-partexp`（sirpdboy）：一键格式化 / 扩容 / 挂载，配合 `fdisk`+`parted`+`kmod-loop` |
+| **分区工具** | `cfdisk`（MBR 交互式）、`cgdisk`（GPT 交互式）、`fdisk`、`parted`；`luci-app-partexp`（sirpdboy）：一键格式化 / 扩容 / 挂载，配合 `fdisk`+`parted`+`kmod-loop` |
 | **存储运维** | `luci-app-diskman`（分区 + SMART）、`parted`、`e2fsprogs`、`btrfs-progs`、`xfs-mkfs`、`mkf2fs`；kmod：ext4 / exfat / vfat / btrfs / f2fs / xfs / ntfs3 / nvme |
 | **监控限速** | `luci-app-nlbwmon`（每主机流量）、`luci-app-rtbwmon`（实时带宽）、`luci-app-eqosplus`（按 IP/时段限速）、`appfilter` |
 | **上网管控** | `luci-app-timecontrol`、`luci-app-control-webrestriction`、`luci-app-control-weburl` |

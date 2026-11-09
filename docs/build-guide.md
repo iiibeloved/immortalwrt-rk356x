@@ -1117,6 +1117,19 @@ docker images && docker ps -a               # 镜像/容器还在
 > 之后重启也不会被改（新版固件已无 `docker-dataroot` 自动改路径逻辑）。
 > 想放回 NVMe：`uci set dockerd.globals.data_root='/mnt/nvme0/docker'`。
 
+### K4.3 命令行分区工具一览（固件内置）
+
+| 工具 | 用途 | 说明 |
+| --- | --- | --- |
+| `parted` | 通用分区（脚本化） | 本手册主要用它；支持 MBR/GPT、`-a none` 关闭对齐检查 |
+| `fdisk` | MBR/GPT 交互式 | 经典工具 |
+| **`cfdisk`** | MBR 交互式（带 TUI） | 直观、适合新手；GPT 盘请用 `cgdisk` |
+| **`cgdisk`** | GPT 交互式（TUI） | 新建/删除 GPT 分区 |
+| `sfdisk` | 脚本化 MBR/GPT | 适合批量/备份分区表 |
+| `luci-app-partexp` | LuCI 界面 | 一键格式化/扩容/挂载（K4.4） |
+
+> 注意：这些工具都**不会自动运行**，只在你在 SSH/LuCI 里手动执行时才生效。
+
 ### K4.4 用 luci-app-partexp 做分区/扩容（可选，界面化）
 
 固件已内置 `luci-app-partexp`（sirpdboy，v2.0.5），LuCI → **系统 → 分区管理**（PartExp）：
