@@ -41,7 +41,7 @@ Docker、DDNS、共享、分区工具齐全；**不做任何自动分区/格式�
 | 文件 | `luci-app-filemanager`、`luci-app-filetransfer` |
 | 应用 | `luci-app-homeassistant`（Docker 方式，含中文；HA≥2026.11 用内置 Marketplace） |
 
-完整包清单（约 **565 个**，含版本）：[docs/packages.md](docs/packages.md)
+完整包清单（**565 个**，含版本）：[docs/packages.md](docs/packages.md)
 
 ## 4. 适用机型
 
