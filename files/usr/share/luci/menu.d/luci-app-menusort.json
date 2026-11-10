@@ -1,0 +1,13 @@
+{
+	"admin/system/menusort": {
+		"title": "菜单排序",
+		"order": 92,
+		"action": {
+			"type": "view",
+			"path": "menusort/menusort"
+		},
+		"depends": {
+			"acl": [ "luci-app-menusort" ]
+		}
+	}
+}

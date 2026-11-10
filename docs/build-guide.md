@@ -680,13 +680,21 @@ LuCI 的菜单顺序由两类文件决定：
 - `/usr/share/luci/menu.d/*.json` 里 `admin/services/<app>` 的 `"order"`（JS 应用）；
 - `/usr/lib/lua/luci/controller/*.lua` 里 `entry({"admin","services","<app>"}, …, N)` 的 `N`（Lua 应用，如 PassWall/OpenClash）。
 
-固件用 **`/usr/bin/luci-services-order`** 统一重排（`/etc/init.d/luci-services-order` 每次开机执行）：
+固件用 **`/usr/bin/luci-services-order`** 统一重排（`/etc/init.d/luci-services-order` 每次开机执行）；另有 LuCI 界面：**系统 → 菜单排序**。
 
 | 分组 | 规则 | 顺序 |
 | --- | --- | --- |
 | 英文名 | 字母序 | `DDNS-Go 10`、`Docker Manager 20`、`FastNet 30`、`Home Assistant 40`、`Homebox 50`、`HomeProxy 60`、`KaiPlus 70`、`KSpeeder 80`、`Lucky 90`、`Navidrome 100`、`OpenClash 110`、`PassWall 120`、`UPnP 130` |
 | 中文名 | 拼音首字母（同首字母按全拼） | `百度网盘 140`、`带宽监控 150`、`动态 DNS 160`、`浮动网关 170`、`缓存回收 180`、`健康检测 190`、`局域网设备唤醒 200`、`局域网设备扫描 210`、`网络共享 220`、`网络唤醒 230`、`网络唤醒+ 240`、`应用过滤 250`、`易有云完整版 260` |
 
+- **LuCI 一键操作**：**系统 → 菜单排序**，两个按钮：
+  | 按钮 | 动作 |
+  | --- | --- |
+  | 正向排序（英文 A-Z → 中文拼音） | 执行 `luci-services-order forward` |
+  | 反向排序（中文倒序 → 英文倒序） | 执行 `luci-services-order reverse` |
+  | 查看日志 | 显示 `/etc/luci-services-order.log` |
+
+  执行完成后页面会**自动强制刷新**（等价 Ctrl+F5）；底层脚本与 ACL 由 `luci-app-menusort` 提供。
 - 只改**顶层应用节点**，子菜单（`homeproxy/*`、`nslw/*` 等）不动；
 - **应用升级/重装会重置 order** → 开机脚本自动重排；也可手动 `/usr/bin/luci-services-order` + Ctrl+F5；
 - 新装应用若不在映射表里，按它自带 order 插入（可在脚本里加一行）。
