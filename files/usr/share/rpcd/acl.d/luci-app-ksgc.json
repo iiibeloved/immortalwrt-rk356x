@@ -1,0 +1,7 @@
+{
+	"luci-app-ksgc": {
+		"description": "KSpeeder 缓存回收设置",
+		"read": { "uci": [ "istoreenhance" ] },
+		"write": { "uci": [ "istoreenhance" ] }
+	}
+}

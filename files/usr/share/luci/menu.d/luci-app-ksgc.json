@@ -1,0 +1,13 @@
+{
+	"admin/services/ksgc": {
+		"title": "KSpeeder 缓存回收",
+		"order": 62,
+		"action": {
+			"type": "view",
+			"path": "ksgc/ksgc"
+		},
+		"depends": {
+			"acl": [ "luci-app-ksgc" ]
+		}
+	}
+}

@@ -1628,16 +1628,30 @@ ks-cli status                 # healthy / endpoints 状态
 ks-cli cache clean            # 手动清空缓存（会影响下次拉取速度，不影响容器）
 ```
 
-**固件内置的自动回收**：`/usr/bin/kspeeder-cache-gc` + 每日 04:15 的 cron
+**固件内置的自动回收**：`/usr/bin/kspeeder-cache-gc` + `*/15 * * * *` 的 cron
+
+参数走 **uci（LuCI 可改）**，页面：**服务 → KSpeeder 缓存回收**
+
+| uci 键 | 含义 | 默认 |
+| --- | --- | --- |
+| `istoreenhance.@istoreenhance[0].gc_enabled` | 是否启用自动回收 | `1` |
+| `istoreenhance.@istoreenhance[0].gc_limit_mb` | 缓存阈值（MB） | `2048`（2 GiB） |
+| `istoreenhance.@istoreenhance[0].gc_time` | 每天检查时间 `HH:MM` | `04:15` |
 
 ```sh
-KS_CACHE_LIMIT_MB=2048 /usr/bin/kspeeder-cache-gc   # 超过 2 GiB 才清（默认）
-tail -3 /etc/kspeeder-cache-gc.log                  # 看跳过/清理记录
+# 命令行等价
+uci set istoreenhance.@istoreenhance[0].gc_limit_mb='4096'
+uci set istoreenhance.@istoreenhance[0].gc_time='03:30'
+uci commit istoreenhance
+
+# 立刻验证一次（会写 /tmp/kspeeder-gc.last 标记）
+rm -f /tmp/kspeeder-gc.last && /usr/bin/kspeeder-cache-gc
+tail -3 /etc/kspeeder-cache-gc.log
 ```
 
-- 阈值默认 **2 GiB**，可用环境变量覆盖（例如临时调成 1024 试一次）；
-- 未超阈值时只记录「跳过」，不会误删热缓存；
-- 想改时间：`vi /etc/crontabs/root` 后 `/etc/init.d/cron restart`。
+- cron 每 15 分钟轮询一次，到点且当天未跑过才执行（精度 ≤15 分钟）；
+- 未超阈值只记录「跳过」，不会误删热缓存；
+- 关闭自动回收：`uci set ... .gc_enabled='0'`（仍可手动 `ks-cli cache clean`）。
 
 **管理界面（5003）**：`http://<路由IP>:5003`，可看命中率/节点/缓存等（登录方式为二维码会话，CLI 无法代登录）。
 缓存目录与清理也可在该界面操作，但**自动回收建议交给上面的 cron**，更可控。

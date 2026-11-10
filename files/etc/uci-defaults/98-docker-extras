@@ -1,11 +1,17 @@
 #!/bin/sh
-# 首次启动：给 KSpeeder 缓存加每日回收任务（只在装了 ks-cli 时）
+# 首次启动：KSpeeder 缓存回收的默认值 + cron（只在装了 ks-cli 时）
 command -v ks-cli >/dev/null 2>&1 || exit 0
+
+# uci 默认值（已存在则不覆盖用户设置）
+uci -q get istoreenhance.@istoreenhance[0].gc_enabled   >/dev/null 2>&1 || uci set istoreenhance.@istoreenhance[0].gc_enabled='1'
+uci -q get istoreenhance.@istoreenhance[0].gc_limit_mb  >/dev/null 2>&1 || uci set istoreenhance.@istoreenhance[0].gc_limit_mb='2048'
+uci -q get istoreenhance.@istoreenhance[0].gc_time      >/dev/null 2>&1 || uci set istoreenhance.@istoreenhance[0].gc_time='04:15'
+uci -q commit istoreenhance
 
 CRON=/etc/crontabs/root
 grep -q 'kspeeder-cache-gc' "$CRON" 2>/dev/null || {
-	echo "15 4 * * * /usr/bin/kspeeder-cache-gc" >> "$CRON"
-	echo "$(date '+%F %T') 已添加 kspeeder 缓存回收 cron" >> /etc/kspeeder-cache-gc.log
+	echo "*/15 * * * * /usr/bin/kspeeder-cache-gc" >> "$CRON"
+	echo "$(date '+%F %T') 已添加 kspeeder 缓存回收 cron（每 15 分钟轮询）" >> /etc/kspeeder-cache-gc.log
 }
 /etc/init.d/cron restart >/dev/null 2>&1 || /etc/init.d/crond restart >/dev/null 2>&1
 exit 0

@@ -2,22 +2,31 @@
 # =============================================================================
 #  KSpeeder（iStore 增强）缓存回收
 #
-#  KSpeeder 把 docker 镜像层缓存在 $cache 目录（uci istoreenhance.*.cache），
-#  长期拉镜像会持续增长。本脚本在缓存超过阈值时调用 `ks-cli cache clean`，
-#  未超阈值则跳过（避免误删热缓存、影响加速效果）。
+#  uci 可配（LuCI 页面：服务 → KSpeeder 缓存回收）：
+#    istoreenhance.@istoreenhance[0].gc_enabled   1/0 是否启用（默认 1）
+#    istoreenhance.@istoreenhance[0].gc_limit_mb  阈值 MB（默认 2048 = 2 GiB）
+#    istoreenhance.@istoreenhance[0].gc_time      每天检查时间 HH:MM（默认 04:15）
 #
-#  阈值：环境变量 KS_CACHE_LIMIT_MB（默认 2048 = 2 GiB）
-#  日志：/etc/kspeeder-cache-gc.log
-#  定时：/etc/crontabs/root 里 15 4 * * *（由 uci-defaults 98-docker-extras 写入）
+#  cron： */15 * * * * （由 uci-defaults 98-docker-extras 写入）
+#        到点后第一个 15 分钟刻度触发一次，当天只跑一次（/tmp/kspeeder-gc.last）
+#  日志： /etc/kspeeder-cache-gc.log
 # =============================================================================
 
 CACHE=$(uci -q get istoreenhance.@istoreenhance[0].cache)
 [ -n "$CACHE" ] || CACHE=/mnt/nvme0/Configs/iStoreEnhance
-LIMIT_MB=${KS_CACHE_LIMIT_MB:-2048}
+ENABLED=$(uci -q get istoreenhance.@istoreenhance[0].gc_enabled); [ -n "$ENABLED" ] || ENABLED=1
+LIMIT_MB=$(uci -q get istoreenhance.@istoreenhance[0].gc_limit_mb); [ -n "$LIMIT_MB" ] || LIMIT_MB=2048
+GC_TIME=$(uci -q get istoreenhance.@istoreenhance[0].gc_time); [ -n "$GC_TIME" ] || GC_TIME="04:15"
 LOG=/etc/kspeeder-cache-gc.log
+MARK=/tmp/kspeeder-gc.last
 
+[ "$ENABLED" = "1" ] || exit 0
 [ -d "$CACHE" ] || exit 0
 command -v ks-cli >/dev/null 2>&1 || exit 0
+
+now=$(date +%H%M); target=$(echo "$GC_TIME" | tr -d ":")
+[ "$now" -ge "$target" ] || exit 0
+[ "$(cat "$MARK" 2>/dev/null)" = "$(date +%F)" ] && exit 0
 
 used_kb=$(du -sk "$CACHE" 2>/dev/null | awk '{print $1}')
 [ -n "$used_kb" ] || exit 0
@@ -25,7 +34,8 @@ used_mb=$((used_kb / 1024))
 
 if [ "$used_mb" -gt "$LIMIT_MB" ]; then
 	ks-cli cache clean >>"$LOG" 2>&1
-	echo "$(date '+%F %T') 已清理（${used_mb}MB > ${LIMIT_MB}MB）" >> "$LOG"
+	echo "$(date '+%F %T') 已清理（${used_mb}MB > ${LIMIT_MB}MB，计划 ${GC_TIME}）" >> "$LOG"
 else
-	echo "$(date '+%F %T') 跳过（${used_mb}MB <= ${LIMIT_MB}MB）" >> "$LOG"
+	echo "$(date '+%F %T') 跳过（${used_mb}MB <= ${LIMIT_MB}MB，计划 ${GC_TIME}）" >> "$LOG"
 fi
+echo "$(date +%F)" > "$MARK"
