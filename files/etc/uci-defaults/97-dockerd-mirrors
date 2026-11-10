@@ -1,13 +1,24 @@
 #!/bin/sh
-# 首次启动：若用户没配 registry-mirrors，写入国内可用镜像（可用 uci 改）
-. /lib/functions.sh 2>/dev/null || true
+# 首次启动：若用户没配 registry-mirrors，写入一组国内可用的 docker 镜像加速。
+#
+# 说明（2026-11 实测）：
+#   docker.1panel.live     覆盖面广（含 80x86/filebrowser 这类非白名单镜像）✅
+#   docker.m.daocloud.io   常用镜像快，但对部分镜像返回 403（不在白名单）
+#   docker.1ms.run         偶尔 503
+#   docker.xuanyuan.me     对部分镜像 403
+# dockerd 会按顺序尝试，失败自动换下一个，全失败才回源 registry-1.docker.io。
+#
+# 想改：uci -q delete dockerd.globals.registry_mirrors
+#       uci add_list dockerd.globals.registry_mirrors='https://你的镜像'
+#       uci commit dockerd && /etc/init.d/dockerd restart
 
 cur=$(uci -q get dockerd.globals.registry_mirrors 2>/dev/null)
 if [ -z "$cur" ]; then
+	uci -q add_list dockerd.globals.registry_mirrors='https://docker.1panel.live'
 	uci -q add_list dockerd.globals.registry_mirrors='https://docker.m.daocloud.io'
 	uci -q add_list dockerd.globals.registry_mirrors='https://docker.1ms.run'
 	uci -q add_list dockerd.globals.registry_mirrors='https://docker.xuanyuan.me'
 	uci -q commit dockerd
-	echo "已写入 3 个 docker registry mirror" >> /etc/dockerd-json.log
+	echo "$(date '+%F %T') 已写入 4 个 docker registry mirror" >> /etc/docker-mirrors.log
 fi
 exit 0

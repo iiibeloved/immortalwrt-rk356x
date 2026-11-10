@@ -165,6 +165,7 @@ docker info | grep -i 'docker root dir'
 | Docker 日志占满盘 | 固件已增强 init，按 uci 自动轮转（10 MiB×3），无需手工（[K4.6](docs/build-guide.md)） |
 | Docker 只有 `vfs`、空间暴涨 | `data_root` 在 overlay 上；改到真实 ext4 挂载点（如 `/mnt/nvme0/docker`）后重启 dockerd |
 | HA 安装报 `registry-1.docker.io` 超时 | 固件已内置镜像加速；手动兜底见 [K4.7](docs/build-guide.md) |
+| 拉镜像报 `not in the allowlist` / `503` | 是镜像站策略，换 `docker.1panel.live` 前缀拉取再 retag，见 [K4.9](docs/build-guide.md) |
 | HA 没有 HACS | HA ≥ 2026.11 用内置 **Marketplace** 取代 HACS |
 
 ## 9. 下载与文档

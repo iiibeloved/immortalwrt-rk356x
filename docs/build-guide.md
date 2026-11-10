@@ -646,15 +646,18 @@ touch /etc/nvme-automount.format    # 【非默认】允许对空白盘自动建
 # 默认行为 = 只挂载已有文件系统；空白/未知文件系统只记日志，绝不格式化
 ```
 
-**与 docker 的关系**：当前 docker 数据目录固定走 eMMC 的 `/mnt/ext_relay/docker`（50 GiB，`docker-disk` 在 START=58 已设好，
-`nvme-automount` 在 62 才跑，所以不会抢占）。想把 docker 放到 NVMe 上：
+**与 docker 的关系**：固件**不自动选 docker 数据目录**（`docker-disk`/`docker-dataroot` 已移除）。
+`nvme-automount`（START=62）只负责把已有文件系统的 NVMe 挂到 `/mnt/nvme0`，
+docker 用哪个目录由你决定（必须是真实 ext4/xfs/btrfs，否则只能退到 `vfs`）：
 
 ```sh
-uci set dockerd.globals.data_root='/mnt/nvme0/docker'
-uci commit dockerd && /etc/init.d/dockerd restart
+uci set dockerd.globals.data_root='/mnt/nvme0/docker'   # 或 /mnt/nvme0/opt/docker
+uci commit dockerd
+/etc/init.d/dockerd stop; killall dockerd 2>/dev/null; sleep 2; /etc/init.d/dockerd start
+docker info | grep -E 'Docker Root Dir|Storage Driver'
 ```
 
-（也可以在镜像里把 `nvme-automount` 的 `START` 调到 56，让 `docker-dataroot` 自动优先选 NVMe。）
+> `nvme-automount` 早于 `dockerd`（99）启动，所以挂载先就绪、docker 再启动，顺序没问题。
 
 ### 7.10 修掉 TTYD 终端「已拒绝连接」（改 LAN IP 后必现）
 
@@ -837,16 +840,24 @@ https://gh-proxy.com/https://github.com/iiibeloved/immortalwrt-rk356x/releases/d
 | `98-fix-ttyd` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（同上） | 只在存在 `interface` 时才改 |
 | `99-set-lan-ip` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（同上） | 已是目标地址则直接跳过 |
 | `99-opkg-istore` | `/etc/uci-defaults/` | 首次启动一次 | **不会**（同上） | 已有 arch 行则不重复加 |
+| `dockerd`（覆盖版） | `/etc/init.d/`（包自带） | **每次开机 + 每次重启服务** | 会，但只是按 uci 重新生成 `/tmp/dockerd/daemon.json` | 幂等（含 log-opts 增强） |
 | `nvme-automount` | `/etc/init.d/`（已 enable） | **每次开机**（有意为之） | 会，但已挂载则跳过、fstab 按 UUID 去重 | 天然幂等 |
 
-**结论**：`uci-defaults` 那 5 个是**一次性**的，跑成功后被 OpenWrt 自动删除（失败的会保留、下次再试）；
-`/etc/init.d/` 里的 4 个是**常驻**的，每次开机都会执行，但都带幂等/守卫逻辑，**不会重复分区、重复格式化或重复写 fstab**。
+**结论**：`uci-defaults` 那 6 个是**一次性**的，跑成功后被 OpenWrt 自动删除（失败的会保留、下次再试）；
+`/etc/init.d/` 里的 3 个（`dockerd` 覆盖版、`nvme-automount`、`ha-config-path`）是**常驻**的，每次开机都会执行，但都带幂等/守卫逻辑，**不会重复分区、重复格式化或重复写 fstab**。
 
 想手动重置某一步：
 
 ```sh
-rm -f /etc/.docker-disk.done /etc/.docker-disk.rebooted   # 允许 docker-disk 重新执行
-/etc/init.d/docker-disk start
+# 重新跑某些一次性脚本（对应文件会被删除，删掉后重启会按顺序重跑）
+cp /rom/etc/uci-defaults/97-dockerd-mirrors /etc/uci-defaults/ 2>/dev/null || true
+cp /rom/etc/uci-defaults/96-docker-firewall /etc/uci-defaults/ 2>/dev/null || true
+reboot
+
+# 常驻脚本手动重跑（幂等）
+/etc/init.d/nvme-automount start     # 重新检测并挂载 NVMe
+/etc/init.d/ha-config-path start     # 重算 HA 配置路径
+/etc/init.d/dockerd restart          # 按 uci 重新生成 docker 配置
 ```
 
 ## 附录 E. 默认 LAN 管理地址
@@ -1001,126 +1012,80 @@ opkg update
 （不影响已安装的 iStore 与商店安装应用。）
 
 
-## 附录 I. 首次刷机操作指引（含「首启自动重启」）
+## 附录 I. 首次刷机操作指引（当前版本：无自动分区、无自动重启）
 
-刷完新固件**第一次开机**，固件会做一串初始化，其中可能**自动重启一次**（分区表写入后内核未即时识别时的兜底）。
-按下面顺序操作最省事，也最不容易误判成「卡死 / 刷坏」。
+刷完新固件第一次开机，固件只做**配置类**初始化（改 LAN、改 TTYD、写镜像源、等网络跑 opkg），
+**不会分区、不会格式化、不会自动重启**。按下面顺序操作即可。
 
 ### 一、刷机前（30 秒）
 
 | 动作 | 说明 |
 | --- | --- |
-| **LAN 口接电脑**（或交换机） | 默认地址 `192.168.100.1`，DHCP 池 `192.168.100.100–249` |
-| **WAN 口接光猫 / 上级路由** | 首启的 `opkg update`、NTP 校时需要外网；**不接也能用**，只是软件包列表要登录后手动点一次「更新列表」 |
-| 不用插 NVMe / USB | 插了也行，`nvme-automount` 只挂载、不格式化，不会动盘内数据 |
+| LAN 口接电脑（或交换机） | 默认地址 `192.168.100.1`，DHCP 池 `192.168.100.100–249` |
+| WAN 口接光猫 / 上级路由 | 首启 `opkg update`、NTP 校时需要外网；不接也能用，登录后手动「更新列表」一次 |
+| 插 NVMe（可选） | `nvme-automount` **只挂载、不格式化**；空白盘只会被记日志 |
 
-### 二、第一次开机：什么都不做，等它自己重启
-
-- 通电后**不要登录、不要断电**（此时后台可能在写分区表）；
-- 约 **1–3 分钟**内会自动重启一次，日志特征（登录后可在 `/etc/.docker-disk.log` 看到）：
+### 二、开机后 1–2 分钟：登录
 
 ```
-内核尚未识别新分区, 写入重启标记并重启(下次开机继续格式化)
+浏览器： http://192.168.100.1
+用户名： root
+密码：   空（首次登录请立刻设置）
 ```
 
-- 这次重启是**预期行为**，SSH/LuCI 会断开，属正常。
-
-### 三、第二次开机：继续等 2–5 分钟
-
-后台在做（顺序执行）：
-
-1. `mkfs.ext4` 格式化 `p5`（50 GiB，约 10–30 秒）
-2. `mkfs.ext4` 格式化 `p6`（其余，约 30–60 秒）
-3. 挂载 `/mnt/ext_relay`、`/mnt/data`，写 fstab（按 UUID）
-4. `dockerd.globals.data_root=/mnt/ext_relay/docker`
-5. `ha-config-path` 生成 `/mnt/data/Configs/HomeAssistant`（+`custom_components`）
-6. `99-opkg-istore`：等网络 → NTP 校时 → `opkg update`（最多 3 次重试）
-
-**这段时间不要断电**（正在格式化）。
-
-### 四、5 分钟后登录并验证
-
-```
-浏览器: http://192.168.100.1    用户名 root / 密码空（首登请立刻设置）
-```
+此时可以跑一键自检：
 
 ```sh
-parted -s /dev/mmcblk0 print | tail -4        # 期望 4 extended / 5 约 50G / 6 其余
-df -h /mnt/ext_relay /mnt/data
-docker info | grep -i 'docker root dir'       # 期望 /mnt/ext_relay/docker
-ls /etc/rc.d/ | grep -E 'docker|nvme|ha-config'
-cat /etc/.docker-disk.log                     # 拆盘全过程
-cat /etc/opkg-boot.log | tail -5              # opkg 初始化结果
+firstboot-status        # 7 项逐条 ✅/⏳ + 结论
 ```
 
-### 四点五、怎么判断「初始化已经跑完」
-
-最省事的判断：**一次性脚本目录被清空 + 完成标记出现 + 90 秒内没有 mkfs 进程**。
+### 三、判定「初始化完成」
 
 ```sh
-# ① 一次性脚本应已全部被删除（OpenWrt 执行成功即删）
-ls /etc/uci-defaults/                 # 期望：无输出
-
-# ② 拆盘完成标记（存在=分区+格式化+挂载+fstab+docker root 都已做完）
-ls -l /etc/.docker-disk.done          # 期望：存在
-ls -l /etc/.docker-disk.rebooted      # 期望：不存在（存在=刚重启过，还在第二轮）
-
-# ③ 没有正在跑的初始化进程
-pgrep -f 'mkfs|docker-disk|docker-dataroot|ha-config-path'   # 期望：无输出
-
-# ④ 结果自检
-df -h | grep -E 'ext_relay|/mnt/data'
-docker info | grep -i 'docker root dir'
+ls /etc/uci-defaults/                     # 期望：无输出（一次性脚本已执行并删除）
+pgrep -f 'mkfs|parted|ha-config-path|nvme-automount'   # 期望：无输出
+df -h | grep -E '/mnt|overlay'            # 有挂载的盘、overlay 4 GiB
+cat /etc/opkg-boot.log | tail -5          # opkg 初始化结果
 ```
 
-**从下一版固件起**可以直接跑一条命令（本次 r25 里还没有这个文件）：
+### 四、需要数据盘 / docker 目录时（手动，一次即可）
+
+固件不再替你分区。两种方式任选：
 
 ```sh
-firstboot-status      # 8 项逐条 ✅/⏳，最后给「已就绪 / 仍在初始化」结论
+# A. LuCI：系统 → 挂载点（格式化+挂载）或 系统 → Partition Expansion
+# B. 命令行（eMMC 拆 50 GiB ext_relay + 其余 Data）
+END=$(parted -m -s /dev/mmcblk0 unit MiB print | awk -F: '$1=="3"{gsub(/MiB/,"",$3); print int($3)}')
+S=$((END+1)); A=$((S+1)); B=$((A+51200-1))
+parted -s /dev/mmcblk0 unit MiB mkpart extended ${S} 100%
+parted -s /dev/mmcblk0 unit MiB mkpart logical ext4 ${A} ${B}
+parted -s /dev/mmcblk0 unit MiB mkpart logical ext4 $((B+1)) 100%
+reboot                                    # 必须重启，内核才认新分区
+
+mkfs.ext4 -F -m 0 -L ext_relay /dev/mmcblk0p5
+mkfs.ext4 -F -m 0 -L Data      /dev/mmcblk0p6
+mkdir -p /mnt/ext_relay /mnt/data
+mount -t ext4 /dev/mmcblk0p5 /mnt/ext_relay
+mount -t ext4 /dev/mmcblk0p6 /mnt/data
+block detect > /etc/config/fstab && uci commit fstab
 ```
 
-各步骤的日志与标记一览：
-
-| 步骤 | 日志 | 完成标记/判据 |
-| --- | --- | --- |
-| 启用常驻脚本 + 首启执行 | `/etc/custom-initd.log` | `/etc/rc.d/S58docker-disk` 等符号链接存在 |
-| LAN 改址 | `/etc/lan-ip.log` | `uci get network.lan.ipaddr` = `192.168.100.1` |
-| TTYD 修复 | `/etc/ttyd-fix.log` | 监听端口为 `0.0.0.0:7681`（`netstat -lnt` 可查） |
-| eMMC 拆盘 | `/etc/.docker-disk.log` | `/etc/.docker-disk.done`（末尾日志 `完成: …`） |
-| NVMe 挂载 | `/etc/nvme-automount.log` | `/proc/mounts` 中出现 `/mnt/nvme0` |
-| docker 数据目录 | `docker info` | `Docker Root Dir: /mnt/ext_relay/docker` |
-| HA 配置路径 | `/etc/ha-config.log` | `uci get homeassistant.@homeassistant[0].config_path` |
-
-| 软件源 | `/etc/opkg-boot.log` | 末尾 `opkg update 成功（第 N 次）` |
-
-> 经验时长（256 GB eMMC）：第一次开机到自动重启 **1–3 分钟**；第二次开机到全部就绪 **2–5 分钟**。
-> 超过 **10 分钟**仍未出现 `.done`，按上一节看 `/etc/.docker-disk.log`。
-
-### 五、如果 10 分钟后仍没有 p5/p6
-
-按顺序看两处日志，按报错对照 [7.7 节](#77-首次启动自动拆分剩余空间256g-emmc-场景) 的坑位表：
+然后把 docker 指到真实 ext4 上：
 
 ```sh
-cat /etc/.docker-disk.log
-parted -s /dev/mmcblk0 print
-ls -l /etc/.docker-disk.*     # .done 表示已完成; .rebooted 表示已重启过一次
+uci set dockerd.globals.data_root='/mnt/nvme0/docker'   # 或 /mnt/ext_relay/docker
+uci commit dockerd
+/etc/init.d/dockerd stop; killall dockerd 2>/dev/null; sleep 2; /etc/init.d/dockerd start
+docker info | grep -E 'Docker Root Dir|Storage Driver'  # 期望 overlay2
 ```
 
-手动兜底命令见 7.7 / 附录 G（`parted` 建 extended + 两次 `mkpart logical` → 重启 → `mkfs` → `mount` → `block detect`）。
+### 五、注意事项
 
-### 六、常见疑问
-
-| 疑问 | 回答 |
+| 项 | 说明 |
 | --- | --- |
-| 首启不插网线可以吗？ | 可以。拆盘/挂载/docker 都不需要网络；只有 `opkg update` 与 NTP 会失败（日志记录），登录后手动点一次「软件包 → 刷新」即可 |
-| 必须先插 WAN 再开机吗？ | 不必，但**先插好**能让首启的 opkg/NTP 一次成功，省去手动刷新 |
-| WAN 接上级路由 LAN，默认设置能上网吗？ | **能**。本机默认 `WAN(eth1/交换口 4) = DHCP 客户端`、`LAN(eth0/交换口 0-3) = 192.168.100.1/24 + DHCP + NAT`，上级有 DHCP 就自动拿到地址，无需任何设置 |
-| 首启的 opkg update 会被自动重启打断吗？ | 可能。若被打断，一次性脚本**不会**被删除，第二次开机会自动重试；也可登录后手动「软件包 → 刷新列表」 |
-| 需要改 WAN 协议吗？ | 仅两种情况：上级 LAN 没有 DHCP（改 `wan.proto=static`）；上游做了 MAC 白名单（`wan.macaddr` 克隆旧设备 MAC） |
-| 自动重启会丢配置吗？ | 不会。它发生在初始化早期、还没做任何用户配置 |
-| 可以在自动重启期间登录改设置吗？ | 不建议。等第二次开机后 5 分钟再操作 |
-| 断电会怎样？ | 分区表已写则无害；**格式化进行中断电**可能留下不完整分区，脚本下次开机检测到「已有分区但无文件系统」会重新格式化（幂等） |
-
+| **断电风险** | 只在「建分区表 / mkfs」这几秒到几十秒内存在；固件本身不做这些操作 |
+| **`block detect` 会覆盖 fstab** | 生成的条目默认 `enabled=0`，需要手动把目标挂载点设为 `1`：`uci set fstab.@mount[N].enabled='1'` |
+| **数据目录必须真实 ext4** | `/opt/docker` 在 overlayfs 上，docker 只能退回 `vfs`（极耗空间） |
 
 ## 附录 J. 外网接入方式：路由模式 / 交换机(AP)模式
 
@@ -1441,7 +1406,7 @@ uci commit dockerd
 | 限制 | 说明 |
 | --- | --- |
 | 数据目录必须在真实文件系统上 | `/opt/docker` 位于 overlayfs → `overlay2` 不可用，会自动退回 `vfs`（每层完整复制，极易写满）。用 `df -h <data_root>` 确认有独立挂载点 |
-| 首次启动自动写镜像 | `97-dockerd-mirrors` 会在 `registry_mirrors` 为空时写入 3 个可用镜像；想换随时在 LuCI 里改 |
+| 首次启动自动写镜像 | `97-dockerd-mirrors` 会在 `registry_mirrors` 为空时写入 4 个可用镜像（1panel.live 优先）；想换随时在 LuCI 里改 |
 | 局域网访问不了容器端口 | 需要 `lan -> docker` 转发；固件由 `96-docker-firewall` 自动建立（否则只有宿主机本机能访问） |
 
 ### K4.8 部署示例：EMQX 5.8.9（MQTT Broker）
@@ -1506,14 +1471,18 @@ download failed, not found registry.link.ease.net
 原因：国内网络直连 `registry-1.docker.io` 基本拉不动；iStore 脚本里那个回退源
 `registry.link.ease.net` 已不可用。
 
-**固件已内置方案**：首次启动写入 3 个可用镜像，并由 `dockerd-json` 写进 docker 配置：
+**固件已内置方案**：首次启动写入 4 个可用镜像（uci），dockerd 启动时按 uci 生成配置：
 
 ```sh
 uci show dockerd | grep registry_mirrors
-# 默认：docker.m.daocloud.io / docker.1ms.run / docker.xuanyuan.me
-cat /etc/dockerd-custom.json        # 应含 "registry-mirrors": [...]
+# 默认：docker.1panel.live / docker.m.daocloud.io / docker.1ms.run / docker.xuanyuan.me
+cat /tmp/dockerd/daemon.json        # 应含 "registry-mirrors": [...]
 docker info | grep -A4 'Registry Mirrors'
 ```
+
+> 实测经验（2026-11）：`docker.1panel.live` 覆盖面最广（连不在白名单的镜像也能拉）；
+> `docker.m.daocloud.io` 对非白名单镜像会返回 403；`1ms.run` 偶有 503；`xuanyuan.me` 部分镜像 403。
+> dockerd 会按列表顺序尝试，失败自动换下一个。
 
 `registry-mirrors` 生效后，`docker pull homeassistant/home-assistant:latest` 会自动走镜像，**不需要改任何镜像名**。
 
@@ -1541,6 +1510,56 @@ docker images | grep -i home-assistant
 
 > 若三个默认镜像都失效：`uci -q delete dockerd.globals.registry_mirrors && uci commit dockerd && /etc/init.d/dockerd restart`
 > 恢复直连（需要能访问 registry-1.docker.io）。
+
+### K4.9 部署示例：FileBrowser（荒野无灯版）与 Portainer
+
+#### FileBrowser Enhanced（`80x86/filebrowser:latest`）
+
+```sh
+docker pull docker.1panel.live/80x86/filebrowser:latest
+docker tag  docker.1panel.live/80x86/filebrowser:latest 80x86/filebrowser:latest
+
+docker run -d --name filebrowser --restart=unless-stopped \
+  -p 8080:8080 \
+  -e WEB_PORT=8080 -e TZ=Asia/Shanghai -e PUID=0 -e PGID=0 \
+  -v /mnt/nvme0/Configs/filebrowser:/config \
+  -v /mnt/nvme0:/myfiles \
+  80x86/filebrowser:latest
+```
+
+| 约定 | 值 |
+| --- | --- |
+| 文件根目录 | 容器 `/myfiles`（必须挂载；否则日志提示 `volume /myfiles is not mapped`） |
+| 配置/数据库 | 容器 `/config`（`.filebrowser.toml` + `database.db`） |
+| 内部端口 | 默认 `8082`，用 `-e WEB_PORT=8080` 改 |
+| 默认账号 | `admin` / `admin`（登录后立刻改） |
+| 架构 | 镜像 manifest 是 amd64，但内含 **arm64 原生二进制**（`Built For: linux/arm64`），在 RK3568 上运行正常 |
+
+#### Portainer CE
+
+```sh
+docker pull docker.1panel.live/portainer/portainer-ce:latest
+docker tag  docker.1panel.live/portainer/portainer-ce:latest portainer/portainer-ce:latest
+
+docker run -d --name portainer --restart=unless-stopped \
+  -p 8000:8000 -p 9000:9000 -p 9443:9443 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /mnt/nvme0/Configs/portainer:/data \
+  portainer/portainer-ce:latest
+```
+
+- 首次访问 `http://<IP>:9000` 要填 **setup token**（Portainer 2.45+ 新机制）：
+  `docker logs portainer 2>&1 | grep setup_token`
+- `docker.sock` 权限极大 → **不要**暴露到公网。
+
+#### 镜像拉取常见错误对照
+
+| 报错 | 原因 | 处理 |
+| --- | --- | --- |
+| `net/http: request canceled ... registry-1.docker.io` | 直连 Docker Hub 超时 | 用镜像前缀拉取后 retag（见上） |
+| `pull access denied ... this image is not in the allowlist` | daocloud 只代理白名单镜像 | 换 `docker.1panel.live` |
+| `503 Service Unavailable` | 镜像站临时故障 | 换下一个镜像 |
+| `no matching manifest for linux/arm64` | 镜像确实没有 arm64 | 换 arm64 镜像或官方版 |
 
 ### K5. iStore / 应用的数据位置
 
