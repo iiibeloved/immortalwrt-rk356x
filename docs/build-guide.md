@@ -693,13 +693,21 @@ LuCI 的菜单顺序由各 `luci-app-*.json` 里的 `"order"` 决定。固件用
 
 **症状**：从 iStore 装了 `luci-app-routerdog` 后，登录 LuCI 直接进「路由狗」页面。
 
-**原因**：路由狗的 Lua controller 用 `order=1` 注册 `admin/routerdog`，与 `quickstart` 的 `order=1` 平级；
-在中文翻译/排序下它被排到最前，于是成了 admin 首页。
+**原因**（两处叠加）：
+1. `luci-app-routerdog` 的 **menu.d json** 里 `admin/routerdog` 用了 **`"order": -1`** —— 比 status(10)/system(20)… 都小，直接排到最前；
+2. 它的 Lua controller 里还有同名 entry，`order=1`，与 `quickstart` 平级。
 
 **修复**（固件内置 `/etc/init.d/luci-default-page`，开机自动执行）：
 
 ```sh
+# ① json 的 -1 → 70
+sed -i '/"admin\/routerdog"[[:space:]]*:/,/}/ s/"order"[[:space:]]*:[[:space:]]*-1/"order": 70/' \
+  /usr/share/luci/menu.d/luci-app-routerdog.json
+
+# ② lua 的 1 → 10
 sed -i 's/_("RouterDog"), 1)/_("RouterDog"), 10)/' /usr/lib/lua/luci/controller/routerdog.lua
+
+# ③ 清菜单缓存
 rm -f /tmp/luci-indexcache*
 ```
 

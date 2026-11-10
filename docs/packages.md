@@ -14,7 +14,7 @@
 | `files/etc/config/ttyd` | `43666e86f2bdbfaf953a3b09bfdbf9960e6e1fff4fcd7cb687d0d257e17433e2` |
 | `files/etc/init.d/dockerd` | `411fad529258faaaa23b282fe9cc7859311a7d1c6ca5ce32644efba3edbc8092` |
 | `files/etc/init.d/ha-config-path` | `e6e47aa65bbf02c94ce37593bae709cf8f8b3d374851e0512d4a3c1a80f30053` |
-| `files/etc/init.d/luci-default-page` | `4a053cac82402b13abd377d8b082e2016706888de7f65d0d73092aa834b1652e` |
+| `files/etc/init.d/luci-default-page` | `c53bfbef482498dff038516fc6895503da7f49baac549c63ba2f43bb4c8f91e9` |
 | `files/etc/init.d/nvme-automount` | `5cc0155dc8d620f549bfdfea8e4ffa83c4cadae735c70a7bcfd871562650614b` |
 | `files/etc/opkg/distfeeds.conf` | `d7ab59f54676a07d47413bff28beb87b592166a7b0e63b7c2730ec54be2721b7` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |

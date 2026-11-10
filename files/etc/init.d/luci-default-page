@@ -1,13 +1,20 @@
 #!/bin/sh /etc/rc.common
 # =============================================================================
-#  保证 LuCI 登录后回到「QuickStart 首页」
+#  保证 LuCI 登录后落在「QuickStart 首页」
 #
-#  背景：luci-app-routerdog（路由狗）的 Lua controller 用 order=1 注册
-#        admin/routerdog，与 quickstart（同为 order=1）平级；某些翻译/排序下
-#        LuCI 会把「路由狗」当成 admin 首页 → 登录后直接进路由狗。
+#  背景：
+#   - luci-app-routerdog（路由狗）在 menu.d 的 luci-app-routerdog.json 里用
+#     "order": -1 注册 admin/routerdog（比所有菜单都靠前），于是成了 admin 首页；
+#   - 它的 Lua controller 里还有一个 order=1 的同名 entry，与 quickstart 平级。
 #
-#  做法：开机时把 routerdog 的 order 从 1 改成 10（quickstart 仍是 1），
-#        并清掉菜单索引缓存。幂等；routerdog 重装后重启即可恢复。
+#  做法（幂等，每次开机执行）：
+#   1) json 的 order: -1  → 70
+#   2) lua 的 _("RouterDog"), 1) → _("RouterDog"), 10)
+#   3) 清 /tmp/luci-indexcache*
+#  quickstart 保持 order=1，因此稳居第一。
+#
+#  路由狗重装/升级后会覆盖这两处 → 重启一次即自动修回，或手动执行：
+#    /etc/init.d/luci-default-page start
 #  日志：/etc/luci-default-page.log
 # =============================================================================
 
@@ -19,15 +26,23 @@ STOP=10
 log() { echo "$(date '+%F %T') $*" >> "$LOG" 2>/dev/null; }
 
 start() {
-	local f=/usr/lib/lua/luci/controller/routerdog.lua
+	local js=/usr/share/luci/menu.d/luci-app-routerdog.json
+	local lua=/usr/lib/lua/luci/controller/routerdog.lua
+	local changed=0
 
-	if [ -f "$f" ]; then
-		if grep -q '_("RouterDog"), 1)' "$f"; then
-			sed -i 's/_("RouterDog"), 1)/_("RouterDog"), 10)/' "$f" 2>/dev/null && \
-				log "已把 routerdog 菜单 order 从 1 调整为 10（首页保持 quickstart）"
+	if [ -f "$js" ]; then
+		if grep -q '"order"[[:space:]]*:[[:space:]]*-1' "$js"; then
+			sed -i '/"admin\/routerdog"[[:space:]]*:/,/}/ s/"order"[[:space:]]*:[[:space:]]*-1/"order": 70/' "$js" 2>/dev/null && changed=1
 		fi
 	fi
 
+	if [ -f "$lua" ]; then
+		if grep -q '_("RouterDog"), 1)' "$lua"; then
+			sed -i 's/_("RouterDog"), 1)/_("RouterDog"), 10)/' "$lua" 2>/dev/null && changed=1
+		fi
+	fi
+
+	[ "$changed" = "1" ] && log "已修正 routerdog 菜单顺序（首页保持 quickstart）"
 	rm -f /tmp/luci-indexcache* 2>/dev/null
 }
 
