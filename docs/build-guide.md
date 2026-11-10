@@ -1384,53 +1384,118 @@ docker images && docker ps -a               # 镜像/容器还在
 
 > 提示：eMMC 上**不建分区**就没有额外写入，是对寿命最友好的选择。真有备份需求，优先备份到 NVMe。
 
-### K4.6 Docker 容器日志轮转（避免日志把盘写满）
+### K4.6 Docker 日志轮转 + 数据目录（本固件的两个特殊机制）
 
-**r28 及更早版本默认不做轮转**：docker 默认日志驱动是 `json-file` 且没有 `max-size`，
-每个容器的日志会一直增长：
+#### ① 为什么不能直接改 `/etc/docker/daemon.json`
 
+本固件的 `/etc/init.d/dockerd` 用：
+
+```sh
+DOCKER_CONF_DIR="/tmp/dockerd"
 ```
-<mnt>/docker/containers/<容器ID>/<容器ID>-json.log
-```
 
-**新固件（下一版起）已内置** `/etc/docker/daemon.json`：
+并且每次启动都会 `rm -fr` 后**按 uci 重写** `/tmp/dockerd/daemon.json`，所以：
+
+- 放 `/etc/docker/daemon.json` 的配置**不生效**（且 `/etc/docker` 会被清掉）；
+- init 只支持 `log-driver`，**不支持** `log-opts`（`max-size`/`max-file`）。
+
+#### ② 固件内置的解决方案（`/etc/init.d/dockerd-json`，START=98）
+
+开机时自动：
+
+1. 读取 `uci get dockerd.globals.data_root`（默认 `/opt/docker`）；
+2. 生成 **`/etc/dockerd-custom.json`**（在 `/etc/docker`、`/tmp/dockerd` 之外，不会被清理）：
 
 ```json
 {
+  "data-root": "<你的 data_root>",
   "log-driver": "json-file",
   "log-opts": { "max-size": "10m", "max-file": "3" }
 }
 ```
 
-效果：每个容器日志最多 **10 MiB × 3 个文件 = 30 MiB**，超出自动轮转删除最旧文件。
+3. 设置 `dockerd.globals.alt_config_file` 指向它 → dockerd init 会软链到 `/tmp/dockerd/daemon.json` 并跳过重写；
+4. 检查 `data_root` 所在文件系统，如果是 `overlay/tmpfs` 就在 `/etc/dockerd-json.log` 记 ⚠️。
 
-**已在 r28 上运行的机器（手动加，立即生效于新容器）**
+效果：每容器日志最多 **10 MiB × 3 = 30 MiB**，自动轮转。
 
-```sh
-mkdir -p /etc/docker
-cat > /etc/docker/daemon.json <<'JSON'
-{
-  "log-driver": "json-file",
-  "log-opts": { "max-size": "10m", "max-file": "3" }
-}
-JSON
-/etc/init.d/dockerd restart
+#### ③ 数据目录必须落在真实块设备文件系统上
 
-# 查看现有日志占用
-du -sh /mnt/nvme0/docker/containers/*/*-json.log 2>/dev/null | sort -h | tail -5
-```
+`overlay2` 驱动**不能**把 overlayfs 当 upperdir，所以 `data_root` 必须在 `ext4/xfs/btrfs/f2fs` 上：
 
-> ⚠️ `daemon.json` 的日志配置**只对之后新建的容器生效**；已存在的容器需要重建才会应用：
-> `docker rm -f <name>` 后重新 `docker run`（或用 `docker-apps.sh` 重跑）。
+| data_root | 结果 |
+| --- | --- |
+| `/mnt/nvme0/docker`、`/mnt/data/docker`、`/mnt/docker`（真实 ext4 挂载点） | ✅ `overlay2` |
+| `/opt/docker`（overlayfs） | ❌ 自动退回 `vfs`（每层完整复制，4 GiB overlay 很快写满） |
 
-**也可以按容器单独设**（不依赖全局配置）：
+检查方法：
 
 ```sh
-docker run -d --name app \
-  --log-opt max-size=10m --log-opt max-file=3 \
-  ...
+df -h /mnt/nvme0                       # 有独立挂载点
+docker info | grep -iE 'docker root dir|storage driver'   # overlay2 才正常
 ```
 
+#### ④ 手动设置（任一版本）
+
+```sh
+/etc/init.d/dockerd stop; killall dockerd 2>/dev/null; sleep 2
+uci set dockerd.globals.data_root='/mnt/nvme0/docker'
+uci commit dockerd
+/etc/init.d/dockerd start          # dockerd-json 会在启动前重新生成配置
+sleep 3
+cat /tmp/dockerd/daemon.json       # 已含 data-root + log-opts
+docker info | grep -iE 'docker root dir|storage driver'
+```
+
+> ⚠️ 用了 `alt_config_file` 后，`data-root` 以 `/etc/dockerd-custom.json` 为准；
+> 改 uci 的 `data_root` 后**重启 dockerd** 即可（`dockerd-json` 会重新生成该文件）。
+
+### K5. iStore / 应用的数据位置
+
+| 对象 | 建议位置 | 设置方式 |
+| --- | --- | --- |
+| iStore 应用**程序** | `/overlay`（4 GiB，自动） | 无需设置 |
+| iStore 应用**数据** | `/mnt/data` | 商店「快速安装 → 存储位置」下拉里选 `/mnt/data` |
+| Home Assistant 配置 | `/mnt/data/Configs/HomeAssistant` | `ha-config-path` 自动选（≥1 GiB 的已挂载盘），也可在 HA 页面下拉里改 |
+
+检查：
+
+```sh
+df -h /overlay /mnt/data
+uci get istore.istore.last_path 2>/dev/null
+uci get homeassistant.@homeassistant[0].config_path 2>/dev/null
+```
+
+### K6. 建议顺手配好
+
+| 项 | 命令/位置 |
+| --- | --- |
+| 远程管理 | LuCI → 系统 → 管理权（SSH 已开 22） |
+| 终端 | LuCI → 系统 → TTYD 终端（`netstat -lnt` 应看到 `0.0.0.0:7681`） |
+| DDNS | LuCI → 服务 → 动态 DNS / DDNS-GO（已预装） |
+| 端口转发 | LuCI → 防火墙 → 端口转发（只在本机做一次，单层 NAT） |
+| DHCP 静态绑定 | LuCI → 网络 → DHCP/DNS → 静态地址（给 NAS/HA 固定 IP） |
+| 定时重启（可选） | LuCI → 系统 → 计划任务：`0 4 * * * reboot` |
+
+### K7. 收尾校验清单
+
+```sh
+firstboot-status                            # 8 项自检
+parted -s /dev/mmcblk0 print | tail -4      # 4/5/6 分区
+df -h /mnt/ext_relay /mnt/data /overlay
+docker info | grep -i 'docker root dir'
+uci show dockerd | grep data_root
+cat /etc/config/fstab | grep -E 'target|uuid'
+```
+
+### K8. 注意
+
+| 项 | 说明 |
+| --- | --- |
+| eMMC 寿命 | 50 GiB 分区跑 docker 可用，但写入较频繁；在意寿命可把 `data_root` 改到 NVMe |
+| 断电风险 | 分区表写入与 `mkfs` 期间断电可能留残；本手册的做法是「建表→重启→格式化」，窗口很短 |
+| 备份 | 配好后 LuCI 生成一次配置备份；升级勾「保留配置」即可沿用 |
+| 升级 | 以后刷同一基线的新版本，勾保留配置 → 分区、fstab、docker 路径都保留 |
 ### K5. iStore / 应用的数据位置
 
 | 对象 | 建议位置 | 设置方式 |

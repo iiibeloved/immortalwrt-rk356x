@@ -33,7 +33,10 @@ LEFT=$(ls /etc/uci-defaults/ 2>/dev/null | wc -l)
 if [ "${LEFT:-0}" -eq 0 ]; then ok "uci-defaults 已全部执行并被删除"; else wait_ "还有 $LEFT 个一次性脚本未完成"; READY=0; fi
 echo "[5/7] docker"
 DROOT=$(docker info 2>/dev/null | awk -F': ' '/Docker Root Dir/{print $2}')
-if printf '%s' "$DROOT" | grep -q '^/mnt/'; then ok "Docker Root Dir = $DROOT（已指向外挂盘）"
+DDRV=$(docker info 2>/dev/null | awk -F': ' '/Storage Driver/{print $2}')
+if printf '%s' "$DROOT" | grep -q '^/mnt/'; then
+	ok "Docker Root Dir = $DROOT（已指向外挂盘）"
+	[ "$DDRV" = "vfs" ] && { wait_ "存储驱动是 vfs（数据目录可能没真正挂载，检查 mount | grep $DROOT）"; READY=0; }
 elif [ -n "$DROOT" ]; then wait_ "Docker Root Dir = $DROOT（仍在 overlay；需要时手动 uci set dockerd.globals.data_root）"; READY=0
 else wait_ "dockerd 还没起来"; READY=0; fi
 echo "[6/7] 其他服务"

@@ -162,7 +162,8 @@ docker info | grep -i 'docker root dir'
 | `opkg` 报 `has no valid architecture` | 架构表坏了：`sed -i '/^arch/d' /etc/opkg.conf` 后补 `all/noarch/aarch64_generic/aarch64_cortex-a53` 四行 |
 | iStoreOS 源 `Signature check failed` | 固件默认已注释 `option check_signature`；旧版手动注释即可 |
 | `mkfs` 报 `No such device` | 新建分区后**必须重启** |
-| Docker 日志占满盘 | 新固件已内置 `daemon.json`（10 MiB×3）；旧版手动添加（[K4.6](docs/build-guide.md)） |
+| Docker 日志占满盘 | 开机自动生成 `/etc/dockerd-custom.json`（10 MiB×3），无需手工（[K4.6](docs/build-guide.md)） |
+| Docker 只有 `vfs`、空间暴涨 | `data_root` 在 overlay 上；改到真实 ext4 挂载点（如 `/mnt/nvme0/docker`）后重启 dockerd |
 | HA 没有 HACS | HA ≥ 2026.11 用内置 **Marketplace** 取代 HACS |
 
 ## 9. 下载与文档
