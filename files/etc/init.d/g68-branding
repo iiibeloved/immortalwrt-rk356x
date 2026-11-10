@@ -50,7 +50,7 @@ start() {
 		sed -i -E "s|^PRETTY_NAME=.*|PRETTY_NAME=\"ImmortalWrt $VERSION\"|" /usr/lib/os-release
 		sed -i -E "s|^VERSION=.*|VERSION=\"$VERSION\"|" /usr/lib/os-release
 		sed -i -E "s|^VERSION_ID=.*|VERSION_ID=\"$VERSION\"|" /usr/lib/os-release
-		sed -i -E "s|^OPENWRT_RELEASE=.*|OPENWRT_RELEASE='"'"'ImmortalWrt $VERSION'"'"'|" /usr/lib/os-release
+		sed -i -E "s|^OPENWRT_RELEASE=.*|OPENWRT_RELEASE='ImmortalWrt $VERSION'|" /usr/lib/os-release
 		grep -q '^BUILD_ID=' /usr/lib/os-release || echo "BUILD_ID=\"$tag\"" >> /usr/lib/os-release
 		sed -i -E "s|^BUILD_ID=.*|BUILD_ID=\"$tag\"|" /usr/lib/os-release
 	fi

@@ -675,19 +675,21 @@ docker info | grep -E 'Docker Root Dir|Storage Driver'
 
 ### 7.9.1 「服务」菜单排序（英文 A-Z → 中文拼音）
 
-LuCI 的菜单顺序由各 `luci-app-*.json` 里的 `"order"` 决定。固件用
-`/etc/uci-defaults/95-luci-services-order` 统一重排：
+LuCI 的菜单顺序由两类文件决定：
 
-| 分组 | 规则 | 示例 order |
+- `/usr/share/luci/menu.d/*.json` 里 `admin/services/<app>` 的 `"order"`（JS 应用）；
+- `/usr/lib/lua/luci/controller/*.lua` 里 `entry({"admin","services","<app>"}, …, N)` 的 `N`（Lua 应用，如 PassWall/OpenClash）。
+
+固件用 **`/usr/bin/luci-services-order`** 统一重排（`/etc/init.d/luci-services-order` 每次开机执行）：
+
+| 分组 | 规则 | 顺序 |
 | --- | --- | --- |
-| 英文名应用 | 字母序 | `DDNS-Go 10`、`HomeProxy 20`、`Lucky 30`、`UPnP 40` |
-| 中文名应用 | 拼音首字母（同首字母按全拼） | `带宽监控 50`、`动态 DNS 60`、`缓存回收 70`、`健康检测 80`、`局域网设备唤醒 90`、`局域网设备扫描 100`、`网络共享 110`、`网络唤醒 120` |
+| 英文名 | 字母序 | `DDNS-Go 10`、`Docker Manager 20`、`FastNet 30`、`Home Assistant 40`、`Homebox 50`、`HomeProxy 60`、`KaiPlus 70`、`KSpeeder 80`、`Lucky 90`、`Navidrome 100`、`OpenClash 110`、`PassWall 120`、`UPnP 130` |
+| 中文名 | 拼音首字母（同首字母按全拼） | `百度网盘 140`、`带宽监控 150`、`动态 DNS 160`、`浮动网关 170`、`缓存回收 180`、`健康检测 190`、`局域网设备唤醒 200`、`局域网设备扫描 210`、`网络共享 220`、`网络唤醒 230`、`网络唤醒+ 240`、`应用过滤 250`、`易有云完整版 260` |
 
-- 只改顶层 `admin/services/<app>`，**不动子菜单**（如 `homeproxy/*`）；
-- **package 升级会覆盖这些 json**，升级后重跑一次即可：
-  `cp /rom/etc/uci-defaults/95-luci-services-order /etc/uci-defaults/ && reboot`
-  或手动 `/etc/uci-defaults/95-luci-services-order; rm -f /tmp/luci-indexcache*`，浏览器 Ctrl+F5；
-- 新装应用如果没在映射表里，会按它自带的 `order` 插入（可自行补一行 `set_order`）。
+- 只改**顶层应用节点**，子菜单（`homeproxy/*`、`nslw/*` 等）不动；
+- **应用升级/重装会重置 order** → 开机脚本自动重排；也可手动 `/usr/bin/luci-services-order` + Ctrl+F5；
+- 新装应用若不在映射表里，按它自带 order 插入（可在脚本里加一行）。
 
 ### 7.9.2 登录后回不到 QuickStart 首页（装了「路由狗」）
 

@@ -1,0 +1,75 @@
+#!/bin/sh
+# =============================================================================
+#  统一「服务」菜单顺序：英文名应用在前(A-Z)，中文名应用在后(拼音首字母)
+#
+#  覆盖两类来源：
+#    - /usr/share/luci/menu.d/*.json 里的 "admin/services/<app>" 节点（改 "order"）
+#    - /usr/lib/lua/luci/controller/*.lua 里的 entry({"admin","services","<app>"}...)（改末尾数字）
+#
+#  只处理顶层应用节点；子菜单（如 homeproxy/client）不动。
+#  幂等；应用升级/重装后可再次执行（固件在开机时自动执行）。
+#  日志：/etc/luci-services-order.log
+# =============================================================================
+
+MD=/usr/share/luci/menu.d
+LC=/usr/lib/lua/luci/controller
+LOG=/etc/luci-services-order.log
+
+log() { echo "$(date '+%F %T') $*" >> "$LOG" 2>/dev/null; }
+
+patch_json() {   # $1=文件名  $2=app  $3=order
+	f="$MD/$1"; [ -f "$f" ] || return 0
+	awk -v k="\"admin/services/$2\": {" -v n="$3" '
+		{ line=$0 }
+		index(line, k) { inblk=1 }
+		inblk && /"order"/ { sub(/"order"[ \t]*:[ \t]*-?[0-9]+/, "\"order\": " n); inblk=0 }
+		{ print }
+	' "$f" > "$f.tmp" 2>/dev/null && mv "$f.tmp" "$f"
+}
+
+patch_lua() {    # $1=文件名  $2=app  $3=order
+	f="$LC/$1"; [ -f "$f" ] || return 0
+	awk -v a="\"$2\"}" -v n="$3" '
+		{
+			line=$0
+			if ((index(line, "\"services\", " a) || index(line, "\"services\"," a))) {
+				last=-1; lastlen=0; pos=1
+				rest=substr(line,pos)
+				while ((r = match(rest, /,[ \t]*[0-9]+\)/)) > 0) {
+					last = pos + r - 1; lastlen = RLENGTH
+					pos = last + RLENGTH
+					rest = substr(line, pos)
+				}
+				if (last > 0)
+					line = substr(line,1,last-1) ", " n ")" substr(line,last+lastlen)
+			}
+			print line
+		}
+	' "$f" > "$f.tmp" 2>/dev/null && mv "$f.tmp" "$f"
+}
+
+# ---- 英文名（A-Z）----
+o=10
+for a in ddns-go dockermanager fastnet homeassistant homebox homeproxy kaiplus istoreenhance lucky navidrome openclash passwall upnp; do
+	f=$(ls "$MD"/luci-app-*.json 2>/dev/null | xargs grep -l "\"admin/services/$a\": {" 2>/dev/null | head -1)
+	if [ -n "$f" ]; then patch_json "$(basename "$f")" "$a" "$o"; else patch_lua "$a.lua" "$a" "$o"; fi
+	o=$((o+10))
+done
+
+# ---- 中文名（拼音首字母：b d d f h j j j w w y y）----
+o=140
+for a in baidudrive nlbw ddns floatip ksgc emmc-health lan-wake lan-scanner ksmbd wol wolplus appfilter linkeasefull; do
+	f=$(ls "$MD"/luci-app-*.json 2>/dev/null | xargs grep -l "\"admin/services/$a\": {" 2>/dev/null | head -1)
+	if [ -n "$f" ]; then patch_json "$(basename "$f")" "$a" "$o"; else patch_lua "$a.lua" "$a" "$o"; fi
+	o=$((o+10))
+done
+
+# ---- 特例：passwall.lua 用变量 appname，且顶层 entry 的 order = -1 ----
+pw="$LC/passwall.lua"
+if [ -f "$pw" ] && grep -q 'services", appname}' "$pw"; then
+	sed -i '/services", appname}/ s/,[[:space:]]*-\{0,1\}[0-9]\{1,\})/, 120)/' "$pw" 2>/dev/null
+fi
+
+rm -f /tmp/luci-indexcache* 2>/dev/null
+log "服务菜单顺序已应用（英文 10-120 / 中文 125-235）"
+exit 0
