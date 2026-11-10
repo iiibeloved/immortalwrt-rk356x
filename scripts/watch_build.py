@@ -99,6 +99,9 @@ def report(run):
         bad = [s for s in j["steps"] if s.get("conclusion") in ("failure", "cancelled")]
         print(f"job: {j['status']} {j.get('conclusion') or ''} | 失败步骤: "
               f"{[(s['number'], s['name']) for s in bad] or '无'}")
+    if run.get("conclusion") != "success":
+        print("\n构建未成功（cancelled/failure）→ 本次没有新 Release，下面的信息仅供参考或忽略。")
+        return
     rels, _ = api(f"/repos/{OWNER}/{REPO}/releases?per_page=3")
     rel = None
     if isinstance(rels, list):
