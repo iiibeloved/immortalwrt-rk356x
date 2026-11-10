@@ -722,7 +722,7 @@ rm -f /tmp/luci-indexcache*
 | 项 | 位置 | 值 |
 | --- | --- | --- |
 | 设备型号 | `/tmp/sysinfo/model`（ubus `system board` 的 model） | **NSY-G68** |
-| 固件版本 | `/etc/os-release`、`/etc/openwrt_release` | **ImmortalWrt 24.10**（去掉上游 `by:xxx`） |
+| 固件版本 | `/usr/lib/os-release`（**procd 真正读的**，`OPENWRT_RELEASE` 决定 ubus description）、`/etc/os-release`、`/etc/openwrt_release` | **ImmortalWrt 24.10**（去掉上游 `by:xxx`） |
 | 构建版本号 | `/etc/g68-build`（CI 写入）→ `DISTRIB_REVISION`、`DISTRIB_BUILD`、`/etc/banner` | 例 `g68-plus-2026.11.10-r34` |
 | quickstart 首页 | 覆盖 `/www/luci-static/quickstart/index.js`（备份在 `/etc/g68/`） | 去掉「（内核：x.y.z）」后缀 |
 

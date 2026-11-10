@@ -45,6 +45,16 @@ start() {
 		sed -i -E "s|^BUILD_ID=.*|BUILD_ID=\"$tag\"|" /etc/os-release
 	fi
 
+	# /usr/lib/os-release 才是 procd 的数据源（OPENWRT_RELEASE 决定 ubus description）
+	if [ -f /usr/lib/os-release ]; then
+		sed -i -E "s|^PRETTY_NAME=.*|PRETTY_NAME=\"ImmortalWrt $VERSION\"|" /usr/lib/os-release
+		sed -i -E "s|^VERSION=.*|VERSION=\"$VERSION\"|" /usr/lib/os-release
+		sed -i -E "s|^VERSION_ID=.*|VERSION_ID=\"$VERSION\"|" /usr/lib/os-release
+		sed -i -E "s|^OPENWRT_RELEASE=.*|OPENWRT_RELEASE='"'"'ImmortalWrt $VERSION'"'"'|" /usr/lib/os-release
+		grep -q '^BUILD_ID=' /usr/lib/os-release || echo "BUILD_ID=\"$tag\"" >> /usr/lib/os-release
+		sed -i -E "s|^BUILD_ID=.*|BUILD_ID=\"$tag\"|" /usr/lib/os-release
+	fi
+
 	if [ -f /etc/openwrt_release ]; then
 		sed -i -E "s|^DISTRIB_DESCRIPTION=.*|DISTRIB_DESCRIPTION='ImmortalWrt $VERSION'|" /etc/openwrt_release
 		sed -i -E "s|^DISTRIB_RELEASE=.*|DISTRIB_RELEASE='$VERSION'|" /etc/openwrt_release
