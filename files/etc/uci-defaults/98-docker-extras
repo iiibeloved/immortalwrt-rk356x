@@ -1,0 +1,11 @@
+#!/bin/sh
+# 首次启动：给 KSpeeder 缓存加每日回收任务（只在装了 ks-cli 时）
+command -v ks-cli >/dev/null 2>&1 || exit 0
+
+CRON=/etc/crontabs/root
+grep -q 'kspeeder-cache-gc' "$CRON" 2>/dev/null || {
+	echo "15 4 * * * /usr/bin/kspeeder-cache-gc" >> "$CRON"
+	echo "$(date '+%F %T') 已添加 kspeeder 缓存回收 cron" >> /etc/kspeeder-cache-gc.log
+}
+/etc/init.d/cron restart >/dev/null 2>&1 || /etc/init.d/crond restart >/dev/null 2>&1
+exit 0

@@ -1604,6 +1604,30 @@ netstat -lntp | grep -E ':5443|:5003'  # 两个端口都要在
 
 管理界面：`http://<路由IP>:5003`
 
+#### 缓存占用与回收
+
+缓存目录由 `uci istoreenhance.*.cache` 决定（建议放 NVMe，如 `/mnt/nvme0/Configs/iStoreEnhance`）。
+
+```sh
+du -sh $(uci -q get istoreenhance.@istoreenhance[0].cache)     # 当前占用
+ks-cli status                 # healthy / endpoints 状态
+ks-cli cache clean            # 手动清空缓存（会影响下次拉取速度，不影响容器）
+```
+
+**固件内置的自动回收**：`/usr/bin/kspeeder-cache-gc` + 每日 04:15 的 cron
+
+```sh
+KS_CACHE_LIMIT_MB=4096 /usr/bin/kspeeder-cache-gc   # 超过 4 GiB 才清（默认）
+tail -3 /etc/kspeeder-cache-gc.log                  # 看跳过/清理记录
+```
+
+- 阈值可用环境变量覆盖（例如临时调成 1024 试一次）；
+- 未超阈值时只记录「跳过」，不会误删热缓存；
+- 想改时间：`vi /etc/crontabs/root` 后 `/etc/init.d/cron restart`。
+
+**管理界面（5003）**：`http://<路由IP>:5003`，可看命中率/节点/缓存等（登录方式为二维码会话，CLI 无法代登录）。
+缓存目录与清理也可在该界面操作，但**自动回收建议交给上面的 cron**，更可控。
+
 #### dockermanager = 「Docker 管理」（LuCI 应用，不是 dockerd）
 
 | 项 | 值 |
