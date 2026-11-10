@@ -1,0 +1,13 @@
+#!/bin/sh
+# 首次启动：若用户没配 registry-mirrors，写入国内可用镜像（可用 uci 改）
+. /lib/functions.sh 2>/dev/null || true
+
+cur=$(uci -q get dockerd.globals.registry_mirrors 2>/dev/null)
+if [ -z "$cur" ]; then
+	uci -q add_list dockerd.globals.registry_mirrors='https://docker.m.daocloud.io'
+	uci -q add_list dockerd.globals.registry_mirrors='https://docker.1ms.run'
+	uci -q add_list dockerd.globals.registry_mirrors='https://docker.xuanyuan.me'
+	uci -q commit dockerd
+	echo "已写入 3 个 docker registry mirror" >> /etc/dockerd-json.log
+fi
+exit 0

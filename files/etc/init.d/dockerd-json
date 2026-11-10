@@ -1,19 +1,18 @@
 #!/bin/sh /etc/rc.common
 # =============================================================================
-#  生成 docker 守护进程配置（解决这个固件的两个坑）
+#  生成 docker 守护进程配置（解决本固件的几个坑）
 #
-#  坑 1：/etc/init.d/dockerd 用的是 DOCKER_CONF_DIR=/tmp/dockerd，
+#  坑 1：/etc/init.d/dockerd 的 DOCKER_CONF_DIR=/tmp/dockerd，
 #        每次启动都会 rm -rf 并**按 uci 重写** daemon.json，
-#        因此放在 /etc/docker/daemon.json 的日志轮转配置永远不生效。
+#        因此放 /etc/docker/daemon.json 的配置永远不生效。
 #  坑 2：init 只支持 log-driver，不支持 log-opts（max-size/max-file）。
+#  坑 3：国内直连 registry-1.docker.io 基本拉不动，需要 registry-mirrors。
 #
-#  本脚本(早于 dockerd 的 START=99 执行):
-#    1) 从 uci 读 dockerd.globals.data_root（默认 /opt/docker）；
-#    2) 生成 /etc/dockerd-custom.json（在 /etc/docker 和 /tmp/dockerd 之外，不会被清理），
-#       内容含 data-root + json-file 日志轮转；
-#    3) 把 dockerd.globals.alt_config_file 指向它 → dockerd init 会软链到
-#       /tmp/dockerd/daemon.json 并跳过重写；
-#    4) 若 data_root 落在 overlay/tmpfs 上，写告警日志（这种目录只能用 vfs）。
+#  本脚本(START=98, 早于 dockerd 的 99)：
+#    1) 读 uci: dockerd.globals.data_root / registry_mirrors；
+#    2) 生成 /etc/dockerd-custom.json（在 /etc/docker 与 /tmp/dockerd 之外，不会被清掉）；
+#    3) 把 dockerd.globals.alt_config_file 指向它（init 会软链并跳过重写）；
+#    4) 检查 data_root 文件系统，overlay/tmpfs 上会告警（只能用 vfs）。
 #
 #  日志: /etc/dockerd-json.log
 # =============================================================================
@@ -35,40 +34,49 @@ fstype_of_dir() {
 }
 
 start() {
-	local root fs
+	local root fs mirrors m first
 
 	root=$(uci -q get dockerd.globals.data_root 2>/dev/null)
 	[ -n "$root" ] || root="/opt/docker"
+	mirrors=$(uci -q get dockerd.globals.registry_mirrors 2>/dev/null)
 
-	# 目录存在性（不创建：创建在 overlay 上也没意义，但 dockerd 自己会创建）
 	mkdir -p "$root" 2>/dev/null || true
 
 	fs=$(fstype_of_dir "$root")
 	case "$fs" in
 		overlay|overlayfs|tmpfs|ramfs)
-			log "⚠️ data_root=$root 位于 $fs 文件系统：docker 只能退回 vfs（每层完整复制，极易写满）。"
-			log "   请把 data_root 指到真实块设备挂载点（ext4/xfs/btrfs/f2fs），例如 /mnt/nvme0/docker 或 /mnt/data/docker。"
+			log "⚠️ data_root=$root 位于 $fs：docker 只能退回 vfs（每层完整复制，极易写满）"
+			log "   请把 data_root 指到真实块设备挂载点（ext4/xfs/btrfs/f2fs），如 /mnt/nvme0/docker"
 			;;
 		*) log "data_root=$root 文件系统=$fs（可支持 overlay2）" ;;
 	esac
 
-	# 生成自定义 daemon 配置
+	# 生成配置
 	{
 		printf '{\n'
 		printf '  "data-root": "%s",\n' "$root"
 		printf '  "log-driver": "json-file",\n'
-		printf '  "log-opts": { "max-size": "%s", "max-file": "%s" }\n' "$MAX_SIZE" "$MAX_FILE"
-		printf '}\n'
+		printf '  "log-opts": { "max-size": "%s", "max-file": "%s" }' "$MAX_SIZE" "$MAX_FILE"
+		if [ -n "$mirrors" ]; then
+			printf ',\n  "registry-mirrors": ['
+			first=1
+			for m in $mirrors; do
+				[ "$first" = "1" ] || printf ', '
+				printf '"%s"' "$m"
+				first=0
+			done
+			printf ']'
+		fi
+		printf '\n}\n'
 	} > "$CUSTOM_JSON" 2>/dev/null || { log "写 $CUSTOM_JSON 失败"; return 0; }
 
-	# 指向它（alt_config_file 生效后，init 会跳过 data-root 的 uci 读取，数据以本文件为准）
 	if [ "$(uci -q get dockerd.globals.alt_config_file 2>/dev/null)" != "$CUSTOM_JSON" ]; then
 		uci -q set "dockerd.globals.alt_config_file=$CUSTOM_JSON"
 		uci -q commit dockerd
 		log "已设置 dockerd.globals.alt_config_file=$CUSTOM_JSON"
 	fi
 
-	log "配置已生成: $CUSTOM_JSON（data-root=$root, log-opts=$MAX_SIZE x $MAX_FILE）"
+	log "配置已生成: $CUSTOM_JSON（data-root=$root, log=$MAX_SIZE x $MAX_FILE, mirrors=${mirrors:-无}）"
 }
 
 stop() { :; }

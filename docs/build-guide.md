@@ -1450,6 +1450,56 @@ docker info | grep -iE 'docker root dir|storage driver'
 > ⚠️ 用了 `alt_config_file` 后，`data-root` 以 `/etc/dockerd-custom.json` 为准；
 > 改 uci 的 `data_root` 后**重启 dockerd** 即可（`dockerd-json` 会重新生成该文件）。
 
+### K4.7 国内拉取镜像失败（HA 安装报 `registry-1.docker.io` 超时）
+
+**症状**（iStore 装 HA 时）：
+
+```
+docker pull homeassistant/home-assistant:latest
+Error response from daemon: Get "https://registry-1.docker.io/v2/":
+  net/http: request canceled while waiting for connection (Client.Timeout exceeded)
+download failed, not found registry.link.ease.net
+```
+
+原因：国内网络直连 `registry-1.docker.io` 基本拉不动；iStore 脚本里那个回退源
+`registry.link.ease.net` 已不可用。
+
+**固件已内置方案**：首次启动写入 3 个可用镜像，并由 `dockerd-json` 写进 docker 配置：
+
+```sh
+uci show dockerd | grep registry_mirrors
+# 默认：docker.m.daocloud.io / docker.1ms.run / docker.xuanyuan.me
+cat /etc/dockerd-custom.json        # 应含 "registry-mirrors": [...]
+docker info | grep -A4 'Registry Mirrors'
+```
+
+`registry-mirrors` 生效后，`docker pull homeassistant/home-assistant:latest` 会自动走镜像，**不需要改任何镜像名**。
+
+**想换/加镜像**：
+
+```sh
+uci -q delete dockerd.globals.registry_mirrors
+uci add_list dockerd.globals.registry_mirrors='https://docker.m.daocloud.io'
+uci add_list dockerd.globals.registry_mirrors='https://你的镜像'
+uci commit dockerd
+/etc/init.d/dockerd restart
+docker info | grep -A4 'Registry Mirrors'
+```
+
+**手工兜底（镜像里没有官方名时）**：
+
+```sh
+docker pull docker.m.daocloud.io/homeassistant/home-assistant:latest
+docker tag  docker.m.daocloud.io/homeassistant/home-assistant:latest \
+            homeassistant/home-assistant:latest
+docker images | grep -i home-assistant
+```
+
+然后回到 iStore 重新点安装（它会发现镜像已存在而跳过拉取）。
+
+> 若三个默认镜像都失效：`uci -q delete dockerd.globals.registry_mirrors && uci commit dockerd && /etc/init.d/dockerd restart`
+> 恢复直连（需要能访问 registry-1.docker.io）。
+
 ### K5. iStore / 应用的数据位置
 
 | 对象 | 建议位置 | 设置方式 |
