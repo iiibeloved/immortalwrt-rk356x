@@ -1,0 +1,31 @@
+#!/bin/sh
+# =============================================================================
+#  首次启动：让容器映射端口能被 LAN 侧访问
+#
+#  背景：OpenWrt 的 fw4 默认 forward 策略是 REJECT，docker 做了 DNAT 之后
+#        数据包还需要「转发到 docker0」才放行；只建 docker zone 不够，
+#        必须显式加 lan -> docker 的 forwarding，否则：
+#          宿主机本机 curl 127.0.0.1:<port> 正常，但局域网其他机器访问超时。
+# =============================================================================
+
+# docker zone（dockerd 启动时也会建，这里幂等兜底）
+if ! uci -q get firewall.docker >/dev/null 2>&1; then
+	uci set firewall.docker=zone
+	uci set firewall.docker.name='docker'
+	uci set firewall.docker.network='docker'
+	uci set firewall.docker.input='ACCEPT'
+	uci set firewall.docker.output='ACCEPT'
+	uci set firewall.docker.forward='ACCEPT'
+fi
+
+# lan -> docker 转发（容器端口映射必需）
+if ! uci -q get firewall.fw_lan_docker >/dev/null 2>&1; then
+	uci set firewall.fw_lan_docker=forwarding
+	uci set firewall.fw_lan_docker.src='lan'
+	uci set firewall.fw_lan_docker.dest='docker'
+fi
+
+uci -q commit firewall
+/etc/init.d/firewall reload >/dev/null 2>&1
+echo "docker 防火墙：docker zone + lan->docker forwarding 已就绪" >> /etc/docker-fw.log
+exit 0

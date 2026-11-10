@@ -1442,6 +1442,55 @@ uci commit dockerd
 | --- | --- |
 | 数据目录必须在真实文件系统上 | `/opt/docker` 位于 overlayfs → `overlay2` 不可用，会自动退回 `vfs`（每层完整复制，极易写满）。用 `df -h <data_root>` 确认有独立挂载点 |
 | 首次启动自动写镜像 | `97-dockerd-mirrors` 会在 `registry_mirrors` 为空时写入 3 个可用镜像；想换随时在 LuCI 里改 |
+| 局域网访问不了容器端口 | 需要 `lan -> docker` 转发；固件由 `96-docker-firewall` 自动建立（否则只有宿主机本机能访问） |
+
+### K4.8 部署示例：EMQX 5.8.9（MQTT Broker）
+
+> 已在 `192.168.6.145` 实测通过：Dashboard `http://<IP>:18083` 可从局域网访问。
+
+```sh
+BASE=/mnt/nvme0/Configs/emqx          # 必须放 NVMe/真实 ext4
+IMAGE=emqx/emqx:5.8.9
+
+# 1) 拉镜像（走镜像加速；失败则手工换前缀）
+docker pull $IMAGE || { docker pull docker.m.daocloud.io/$IMAGE && docker tag docker.m.daocloud.io/$IMAGE $IMAGE; }
+
+# 2) 临时容器导出默认配置
+docker rm -f emqx-tmp 2>/dev/null
+docker run -d --name emqx-tmp $IMAGE && sleep 8
+
+# 3) 建目录 + 复制配置
+mkdir -p $BASE/{data,log,etc,plugins}
+for d in etc data log plugins; do docker cp emqx-tmp:/opt/emqx/$d/. $BASE/$d/; done
+docker rm -f emqx-tmp
+
+# 4) 清旧状态 + 权限
+rm -rf $BASE/data/mnesia/* $BASE/data/configs/*
+chown -R 1000:1000 $BASE && chmod -R 755 $BASE
+
+# 5) 正式容器
+docker run -d --name emqx --restart=unless-stopped \
+  -p 1883:1883 -p 8083:8083 -p 8883:8883 -p 18083:18083 \
+  -e TZ=Asia/Shanghai \
+  -e EMQX_NODE_NAME=emqx@127.0.0.1 \
+  -v $BASE/data:/opt/emqx/data -v $BASE/log:/opt/emqx/log \
+  -v $BASE/etc:/opt/emqx/etc -v $BASE/plugins:/opt/emqx/plugins \
+  $IMAGE
+
+# 6) 验证
+sleep 12
+docker exec emqx emqx ctl status
+docker logs --tail 20 emqx
+```
+
+| 项 | 说明 |
+| --- | --- |
+| Dashboard | `http://<路由IP>:18083`，默认 **admin / public**（首次登录强制改密码） |
+| 端口 | 1883 MQTT / 8083 WS / 8883 TLS / 18083 Dashboard |
+| **节点名** | 用 `emqx@127.0.0.1` 而不是 IP —— 换路由 IP 时不用重建容器；将来做集群再改成实际 IP |
+| 数据目录 | `/mnt/nvme0/Configs/emqx`（在 NVMe 上，重启不丢） |
+| 自启 | `--restart=unless-stopped` |
+| **局域网访问不了** | 需要 `lan -> docker` 转发；固件已内置 `96-docker-firewall`（首次启动自动建 docker zone + forwarding） |
 
 ### K4.7 国内拉取镜像失败（HA 安装报 `registry-1.docker.io` 超时）
 

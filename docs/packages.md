@@ -18,6 +18,7 @@
 | `files/etc/opkg/distfeeds.conf` | `d7ab59f54676a07d47413bff28beb87b592166a7b0e63b7c2730ec54be2721b7` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |
 | `files/etc/opkg.conf` | `6e774833ba703e1bac7c09f7975fb69971e2bfed61ff263614acb5994f8b190d` |
+| `files/etc/uci-defaults/96-docker-firewall` | `60180ae404f012e24eb0bb1d3d6f76cd79bb86ebab1e91e97a332a7085935ef8` |
 | `files/etc/uci-defaults/97-dockerd-mirrors` | `72211bfe8a1e88f2a6c68f1a9104fff06031ba4e2607f7041528d0583af86737` |
 | `files/etc/uci-defaults/98-enable-custom-initd` | `56b8176538b6f8e5a145694563714e73d721dbcf99f32bf362efd750ce54b3b3` |
 | `files/etc/uci-defaults/98-fix-ttyd` | `3ea3fc0ba31c8f2efa3bf43422589a695bc5d713d3f78a144581986e0acc0f59` |
