@@ -1384,71 +1384,64 @@ docker images && docker ps -a               # 镜像/容器还在
 
 > 提示：eMMC 上**不建分区**就没有额外写入，是对寿命最友好的选择。真有备份需求，优先备份到 NVMe。
 
-### K4.6 Docker 日志轮转 + 数据目录（本固件的两个特殊机制）
+### K4.6 Docker 配置（数据目录 / 镜像 / 日志）全部走 uci
 
-#### ① 为什么不能直接改 `/etc/docker/daemon.json`
+本固件**覆盖**了 dockerd 自带的 init 脚本（`/etc/init.d/dockerd`），在其基础上只加了两处增强：
 
-本固件的 `/etc/init.d/dockerd` 用：
+1. 支持 `log-opts`：从 uci 读 `log_max_size`（默认 `10m`）/`log_max_file`（默认 `3`），写进 `daemon.json`；
+2. `log_driver` 默认 `json-file`（即便没配置也会轮转）。
 
-```sh
-DOCKER_CONF_DIR="/tmp/dockerd"
-```
+> 为什么原来不行：上游 init 每次启动都会 `rm -fr /tmp/dockerd` 并按 uci **重写** `daemon.json`，
+> 而且只支持 `log-driver`、不支持 `log-opts`；放 `/etc/docker/daemon.json` 的配置**永远不生效**。
+> 现在这些都在 init 里补上了，所以**一切以 uci 为准**。
 
-并且每次启动都会 `rm -fr` 后**按 uci 重写** `/tmp/dockerd/daemon.json`，所以：
+#### 在 LuCI 里改（推荐）
 
-- 放 `/etc/docker/daemon.json` 的配置**不生效**（且 `/etc/docker` 会被清掉）；
-- init 只支持 `log-driver`，**不支持** `log-opts`（`max-size`/`max-file`）。
+**Docker → 配置**：
 
-#### ② 固件内置的解决方案（`/etc/init.d/dockerd-json`，START=98）
+| 字段 | 作用 | 对应 uci |
+| --- | --- | --- |
+| Docker 根目录 | 数据目录（**必须是真实 ext4 挂载点**，如 `/mnt/nvme0/opt/docker`） | `dockerd.globals.data_root` |
+| Registry 镜像 | 国内拉镜像加速 | `dockerd.globals.registry_mirrors`（列表） |
+| 日志等级 | Docker 自身日志级别 | `dockerd.globals.log_level` |
 
-开机时自动：
-
-1. 读取 `uci get dockerd.globals.data_root`（默认 `/opt/docker`）；
-2. 生成 **`/etc/dockerd-custom.json`**（在 `/etc/docker`、`/tmp/dockerd` 之外，不会被清理）：
-
-```json
-{
-  "data-root": "<你的 data_root>",
-  "log-driver": "json-file",
-  "log-opts": { "max-size": "10m", "max-file": "3" }
-}
-```
-
-3. 设置 `dockerd.globals.alt_config_file` 指向它 → dockerd init 会软链到 `/tmp/dockerd/daemon.json` 并跳过重写；
-4. 检查 `data_root` 所在文件系统，如果是 `overlay/tmpfs` 就在 `/etc/dockerd-json.log` 记 ⚠️。
-
-效果：每容器日志最多 **10 MiB × 3 = 30 MiB**，自动轮转。
-
-#### ③ 数据目录必须落在真实块设备文件系统上
-
-`overlay2` 驱动**不能**把 overlayfs 当 upperdir，所以 `data_root` 必须在 `ext4/xfs/btrfs/f2fs` 上：
-
-| data_root | 结果 |
-| --- | --- |
-| `/mnt/nvme0/docker`、`/mnt/data/docker`、`/mnt/docker`（真实 ext4 挂载点） | ✅ `overlay2` |
-| `/opt/docker`（overlayfs） | ❌ 自动退回 `vfs`（每层完整复制，4 GiB overlay 很快写满） |
-
-检查方法：
-
-```sh
-df -h /mnt/nvme0                       # 有独立挂载点
-docker info | grep -iE 'docker root dir|storage driver'   # overlay2 才正常
-```
-
-#### ④ 手动设置（任一版本）
+改完点「保存并应用」；若镜像/数据目录没立刻生效，手动重启一次：
 
 ```sh
 /etc/init.d/dockerd stop; killall dockerd 2>/dev/null; sleep 2
-uci set dockerd.globals.data_root='/mnt/nvme0/docker'
-uci commit dockerd
-/etc/init.d/dockerd start          # dockerd-json 会在启动前重新生成配置
+/etc/init.d/dockerd start
 sleep 3
-cat /tmp/dockerd/daemon.json       # 已含 data-root + log-opts
-docker info | grep -iE 'docker root dir|storage driver'
+cat /tmp/dockerd/daemon.json          # 确认 data-root / registry-mirrors / log-opts 都在
+docker info | grep -E 'Docker Root Dir|Storage Driver'
+docker info | sed -n '/Registry Mirrors/,/^$/p'
 ```
 
-> ⚠️ 用了 `alt_config_file` 后，`data-root` 以 `/etc/dockerd-custom.json` 为准；
-> 改 uci 的 `data_root` 后**重启 dockerd** 即可（`dockerd-json` 会重新生成该文件）。
+#### 命令行等价
+
+```sh
+# 数据目录（必须真实块设备 fs，否则只能 vfs）
+uci set dockerd.globals.data_root='/mnt/nvme0/opt/docker'
+
+# 镜像加速（失效的就删掉）
+uci -q delete dockerd.globals.registry_mirrors
+uci add_list dockerd.globals.registry_mirrors='https://docker.m.daocloud.io'
+uci add_list dockerd.globals.registry_mirrors='https://docker.1ms.run'
+uci add_list dockerd.globals.registry_mirrors='https://docker.xuanyuan.me'
+
+# 日志轮转（默认 10m x 3，可改）
+uci set dockerd.globals.log_max_size='10m'
+uci set dockerd.globals.log_max_file='3'
+
+uci commit dockerd
+/etc/init.d/dockerd restart
+```
+
+#### 两个硬性限制
+
+| 限制 | 说明 |
+| --- | --- |
+| 数据目录必须在真实文件系统上 | `/opt/docker` 位于 overlayfs → `overlay2` 不可用，会自动退回 `vfs`（每层完整复制，极易写满）。用 `df -h <data_root>` 确认有独立挂载点 |
+| 首次启动自动写镜像 | `97-dockerd-mirrors` 会在 `registry_mirrors` 为空时写入 3 个可用镜像；想换随时在 LuCI 里改 |
 
 ### K4.7 国内拉取镜像失败（HA 安装报 `registry-1.docker.io` 超时）
 

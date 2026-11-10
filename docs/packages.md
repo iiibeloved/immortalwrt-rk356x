@@ -12,14 +12,14 @@
 | 文件 | sha256 |
 | --- | --- |
 | `files/etc/config/ttyd` | `43666e86f2bdbfaf953a3b09bfdbf9960e6e1fff4fcd7cb687d0d257e17433e2` |
-| `files/etc/init.d/dockerd-json` | `5a403bf879ed3d682d6ccc1814730dbfdf6a17b66ee88ebf3ddf11b9c410b432` |
+| `files/etc/init.d/dockerd` | `b490b44e543daa4c4716a710ba484e2a45674ae499c5c1e09fe307dd26db2f06` |
 | `files/etc/init.d/ha-config-path` | `e6e47aa65bbf02c94ce37593bae709cf8f8b3d374851e0512d4a3c1a80f30053` |
 | `files/etc/init.d/nvme-automount` | `5cc0155dc8d620f549bfdfea8e4ffa83c4cadae735c70a7bcfd871562650614b` |
 | `files/etc/opkg/distfeeds.conf` | `d7ab59f54676a07d47413bff28beb87b592166a7b0e63b7c2730ec54be2721b7` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |
 | `files/etc/opkg.conf` | `6e774833ba703e1bac7c09f7975fb69971e2bfed61ff263614acb5994f8b190d` |
 | `files/etc/uci-defaults/97-dockerd-mirrors` | `72211bfe8a1e88f2a6c68f1a9104fff06031ba4e2607f7041528d0583af86737` |
-| `files/etc/uci-defaults/98-enable-custom-initd` | `41fd6f33f8fee034d39627a9f689a962cb3612cc8ca15c220f63dd9bd7abd94b` |
+| `files/etc/uci-defaults/98-enable-custom-initd` | `56b8176538b6f8e5a145694563714e73d721dbcf99f32bf362efd750ce54b3b3` |
 | `files/etc/uci-defaults/98-fix-ttyd` | `3ea3fc0ba31c8f2efa3bf43422589a695bc5d713d3f78a144581986e0acc0f59` |
 | `files/etc/uci-defaults/99-opkg-istore` | `682b76bbad78f356a0aa8c0a294f4c44fd2b75b2210b93317c9b2afbea3847b0` |
 | `files/etc/uci-defaults/99-set-lan-ip` | `f48add100eb91cd175351357022cf76dbb4a68318471e2695cb98eca333208cd` |
