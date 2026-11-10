@@ -1397,9 +1397,16 @@ uci add_list dockerd.globals.registry_mirrors='https://docker.xuanyuan.me'
 uci set dockerd.globals.log_max_size='10m'
 uci set dockerd.globals.log_max_file='3'
 
+# 重启 dockerd 时保持容器运行（默认开，=1）
+uci set dockerd.globals.live_restore='1'
+
 uci commit dockerd
 /etc/init.d/dockerd restart
 ```
+
+> **为什么需要 live-restore**：`/etc/init.d/dockerd restart` 会停掉所有容器（重启后需手动 `docker start`）。
+> 固件默认开启 `live-restore`，重启 docker 守护进程时容器**继续运行**，减少服务中断。
+> 关掉它：`uci set dockerd.globals.live_restore='0' && uci commit dockerd && /etc/init.d/dockerd restart`。
 
 #### 两个硬性限制
 
