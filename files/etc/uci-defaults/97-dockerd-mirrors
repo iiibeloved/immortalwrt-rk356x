@@ -1,24 +1,36 @@
 #!/bin/sh
 # 首次启动：若用户没配 registry-mirrors，写入一组国内可用的 docker 镜像加速。
 #
-# 说明（2026-11 实测）：
-#   docker.1panel.live     覆盖面广（含 80x86/filebrowser 这类非白名单镜像）✅
-#   docker.m.daocloud.io   常用镜像快，但对部分镜像返回 403（不在白名单）
-#   docker.1ms.run         偶尔 503
-#   docker.xuanyuan.me     对部分镜像 403
-# dockerd 会按顺序尝试，失败自动换下一个，全失败才回源 registry-1.docker.io。
+# 优先用本机 KSpeeder（iStore 增强）：
+#   - registry.linkease.net 解析到 127.0.0.1（KSpeeder 自带 DNS 覆盖）
+#   - 它监听 5443，聚合多个上游镜像（1ms.run / daocloud / 1panel.live / rat.dev ...）并做本地缓存
+#   - 前提：istoreenhance 服务在运行（LuCI -> 服务 -> iStore 增强）
+#   - 未安装/未启动时会自动跳过（docker 会依次尝试下一个 mirror）
 #
-# 想改：uci -q delete dockerd.globals.registry_mirrors
+# 其余为公共镜像站，按其实际可用性排序（2026-11 实测）：
+#   docker.1panel.live     覆盖面广
+#   docker.m.daocloud.io   常用镜像快，非白名单镜像 403
+#   docker.1ms.run         偶有 503
+#
+# 改法：uci -q delete dockerd.globals.registry_mirrors
 #       uci add_list dockerd.globals.registry_mirrors='https://你的镜像'
 #       uci commit dockerd && /etc/init.d/dockerd restart
 
+add_mirror() { uci -q add_list dockerd.globals.registry_mirrors="$1"; }
+
 cur=$(uci -q get dockerd.globals.registry_mirrors 2>/dev/null)
 if [ -z "$cur" ]; then
-	uci -q add_list dockerd.globals.registry_mirrors='https://docker.1panel.live'
-	uci -q add_list dockerd.globals.registry_mirrors='https://docker.m.daocloud.io'
-	uci -q add_list dockerd.globals.registry_mirrors='https://docker.1ms.run'
-	uci -q add_list dockerd.globals.registry_mirrors='https://docker.xuanyuan.me'
+	KS_OK=0
+	[ -x /usr/sbin/iStoreEnhance ] && KS_OK=1
+	[ -f /etc/init.d/istoreenhance ] && uci -q get istoreenhance.@istoreenhance[0].enabled | grep -q '^1$' && KS_OK=1
+
+	[ "$KS_OK" = "1" ] && add_mirror 'https://registry.linkease.net:5443'
+	add_mirror 'https://docker.1panel.live'
+	add_mirror 'https://docker.m.daocloud.io'
+	add_mirror 'https://docker.1ms.run'
+	add_mirror 'https://docker.xuanyuan.me'
+
 	uci -q commit dockerd
-	echo "$(date '+%F %T') 已写入 4 个 docker registry mirror" >> /etc/docker-mirrors.log
+	echo "$(date '+%F %T') 已写入 docker registry mirror（KSpeeder=${KS_OK}）: $(uci -q get dockerd.globals.registry_mirrors)" >> /etc/docker-mirrors.log
 fi
 exit 0

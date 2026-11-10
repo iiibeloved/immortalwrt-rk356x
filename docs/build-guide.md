@@ -1475,8 +1475,7 @@ Error response from daemon: Get "https://registry-1.docker.io/v2/":
 download failed, not found registry.link.ease.net
 ```
 
-原因：国内网络直连 `registry-1.docker.io` 基本拉不动；iStore 脚本里那个回退源
-`registry.link.ease.net` 已不可用。
+原因：国内网络直连 `registry-1.docker.io` 基本拉不动；iStore 脚本里的回退源 `registry.link.ease.net` 需要**本机 KSpeeder 服务**在运行（见 K4.10）。
 
 **固件已内置方案**：首次启动写入 4 个可用镜像（uci），dockerd 启动时按 uci 生成配置：
 
@@ -1567,6 +1566,71 @@ docker run -d --name portainer --restart=unless-stopped \
 | `pull access denied ... this image is not in the allowlist` | daocloud 只代理白名单镜像 | 换 `docker.1panel.live` |
 | `503 Service Unavailable` | 镜像站临时故障 | 换下一个镜像 |
 | `no matching manifest for linux/arm64` | 镜像确实没有 arm64 | 换 arm64 镜像或官方版 |
+
+### K4.10 KSpeeder（iStore 增强）与 Docker 管理（dockermanager）
+
+这是 iStoreOS 生态里两个容易混淆的服务，本机实测结论如下。
+
+#### KSpeeder = 包 `istoreenhance`（LuCI「服务 → iStore 增强」）
+
+| 项 | 值 |
+| --- | --- |
+| 可执行 | `/usr/sbin/iStoreEnhance` |
+| uci | `/etc/config/istoreenhance`（`enabled` / `port=5443` / `adminport=5003` / `cache`） |
+| 监听 | **5443**（docker registry 代理）、**5003**（管理界面） |
+| 缓存目录 | `cache`，建议放 NVMe：`/mnt/nvme0/Configs/iStoreEnhance` |
+| 自启 | `/etc/rc.d/S99istoreenhance` |
+| 作用 | 聚合多个上游镜像站（1ms.run / daocloud / 1panel.live / hub.rat.dev 等）并**本地缓存**，加速 docker pull |
+
+**关键点**：`registry.linkease.net` 在这台机器上**解析到 `127.0.0.1`**（KSpeeder 设计如此），
+所以它**不是公共镜像站**，必须在 KSpeeder 运行时才可用。服务没开时 docker 会报：
+
+```
+Get "http://registry.linkease.net:5443/v2/": dial tcp 127.0.0.1:5443: connect: connection refused
+```
+
+启用/排查：
+
+```sh
+uci set istoreenhance.@istoreenhance[0].enabled='1'
+uci set istoreenhance.@istoreenhance[0].cache='/mnt/nvme0/Configs/iStoreEnhance'
+uci commit istoreenhance
+
+/etc/init.d/istoreenhance enable      # 开机自启
+/etc/init.d/istoreenhance restart
+sleep 3
+netstat -lntp | grep -E ':5443|:5003'  # 两个端口都要在
+```
+
+管理界面：`http://<路由IP>:5003`
+
+#### dockermanager = 「Docker 管理」（LuCI 应用，不是 dockerd）
+
+| 项 | 值 |
+| --- | --- |
+| 包 | `dockermanager` / `luci-app-dockermanager`（+ `app-meta-dockermanager`） |
+| uci | `/etc/config/dockermanager`（`port=8192`、`data_dir=/root/Configs/DockerManager`、`socket_path=...`） |
+| 监听 | 8192（Web/API） |
+| 依赖 | 需要 dockerd 在跑；镜像拉取同样走上面的 registry mirror |
+| 用途 | 容器/镜像/Compose 的图形化管理（iStoreOS 风格），与 `luci-app-dockerman` 是两套 UI，可共存 |
+
+> 这是 **app 层**的管理界面，不替代 dockerd；重启它不影响容器。若 8192 打不开，先看 `logread | grep dockermanager`。
+
+#### 推荐镜像配置（两者结合）
+
+```sh
+# KSpeeder 在场 → 首选本地；其余作为后备
+uci -q delete dockerd.globals.registry_mirrors
+uci add_list dockerd.globals.registry_mirrors='https://registry.linkease.net:5443'
+uci add_list dockerd.globals.registry_mirrors='https://docker.1panel.live'
+uci add_list dockerd.globals.registry_mirrors='https://docker.m.daocloud.io'
+uci commit dockerd
+/etc/init.d/dockerd stop; killall dockerd 2>/dev/null; sleep 2; /etc/init.d/dockerd start
+docker info | sed -n '/Registry Mirrors/,/^$/p'
+```
+
+> 固件的 `97-dockerd-mirrors` 会**自动检测** `iStoreEnhance` 是否存在/启用：
+> 有则把 `registry.linkease.net:5443` 放第一位，没有则只用公共镜像，避免写死一个不可用地址。
 
 ### K5. iStore / 应用的数据位置
 
