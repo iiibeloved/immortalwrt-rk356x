@@ -1,0 +1,34 @@
+#!/bin/sh /etc/rc.common
+# =============================================================================
+#  保证 LuCI 登录后回到「QuickStart 首页」
+#
+#  背景：luci-app-routerdog（路由狗）的 Lua controller 用 order=1 注册
+#        admin/routerdog，与 quickstart（同为 order=1）平级；某些翻译/排序下
+#        LuCI 会把「路由狗」当成 admin 首页 → 登录后直接进路由狗。
+#
+#  做法：开机时把 routerdog 的 order 从 1 改成 10（quickstart 仍是 1），
+#        并清掉菜单索引缓存。幂等；routerdog 重装后重启即可恢复。
+#  日志：/etc/luci-default-page.log
+# =============================================================================
+
+START=97
+STOP=10
+
+: "${LOG:=/etc/luci-default-page.log}"
+
+log() { echo "$(date '+%F %T') $*" >> "$LOG" 2>/dev/null; }
+
+start() {
+	local f=/usr/lib/lua/luci/controller/routerdog.lua
+
+	if [ -f "$f" ]; then
+		if grep -q '_("RouterDog"), 1)' "$f"; then
+			sed -i 's/_("RouterDog"), 1)/_("RouterDog"), 10)/' "$f" 2>/dev/null && \
+				log "已把 routerdog 菜单 order 从 1 调整为 10（首页保持 quickstart）"
+		fi
+	fi
+
+	rm -f /tmp/luci-indexcache* 2>/dev/null
+}
+
+stop() { :; }
