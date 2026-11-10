@@ -252,6 +252,21 @@ jobs:
       # ---------------------------------------------------------------------
       # 3. 配置: defconfig + 附加片段 + rootfs 大小, 再由 make defconfig 归一化
       # ---------------------------------------------------------------------
+      - name: 写入构建信息 /etc/g68-build
+        run: |
+          set -euo pipefail
+          mkdir -p files/etc
+          TAG="g68-plus-$(TZ=Asia/Shanghai date +%Y.%m.%d)"
+          if [ "${VARIANT:-full}" = "generic" ]; then TAG="${TAG}-generic"; fi
+          {
+            echo "BUILD_TAG=${TAG}"
+            echo "BUILD_RUN=${GITHUB_RUN_NUMBER}"
+            echo "BUILD_COMMIT=${GITHUB_SHA:0:8}"
+            echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "BUILD_VARIANT=${VARIANT:-full}"
+          } > files/etc/g68-build
+          cat files/etc/g68-build
+
       - name: 按 variant 裁剪内置脚本/配置
         run: |
           set -euo pipefail

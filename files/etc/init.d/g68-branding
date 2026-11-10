@@ -1,0 +1,71 @@
+#!/bin/sh /etc/rc.common
+# =============================================================================
+#  设备品牌信息统一（开机执行，幂等）
+#
+#   1) 设备型号：/tmp/sysinfo/model = "NSY-G68"（ubus system board 的 model）
+#   2) 固件版本：os-release / openwrt_release 统一成 "ImmortalWrt 24.10"，
+#      去掉上游的 "by:xxx" 等多余文字；构建版本号放进 DISTRIB_REVISION
+#   3) 构建版本号：读 /etc/g68-build（CI 写入），追加到 /etc/banner，
+#      并写入 openwrt_release 的 DISTRIB_REVISION / DISTRIB_BUILD
+#   4) quickstart 首页：去掉「（内核：x.y.z）」后缀；若被包升级还原，
+#      用 /etc/g68/quickstart-index.js 覆盖回去
+#
+#  日志：/etc/g68-branding.log
+# =============================================================================
+
+START=96
+STOP=10
+
+: "${LOG:=/etc/g68-branding.log}"
+: "${MODEL:=NSY-G68}"
+: "${VERSION:=24.10}"
+
+log() { echo "$(date '+%F %T') $*" >> "$LOG" 2>/dev/null; }
+
+build_tag() {
+	sed -n 's/^BUILD_TAG=//p' /etc/g68-build 2>/dev/null | head -1
+}
+
+start() {
+	local tag
+	tag=$(build_tag)
+	[ -n "$tag" ] || tag="dev-$(date +%Y%m%d)"
+
+	# 1) 设备型号
+	mkdir -p /tmp/sysinfo 2>/dev/null
+	printf '%s' "$MODEL" > /tmp/sysinfo/model 2>/dev/null && log "model=$MODEL"
+
+	# 2) 版本信息（去掉 by:xxx 等后缀）
+	if [ -f /etc/os-release ]; then
+		sed -i -E "s|^PRETTY_NAME=.*|PRETTY_NAME=\"ImmortalWrt $VERSION\"|" /etc/os-release
+		sed -i -E "s|^NAME=.*|NAME=\"ImmortalWrt\"|" /etc/os-release
+		sed -i -E "s|^VERSION=.*|VERSION=\"$VERSION\"|" /etc/os-release
+		sed -i -E "s|^VERSION_ID=.*|VERSION_ID=\"$VERSION\"|" /etc/os-release
+		grep -q '^BUILD_ID=' /etc/os-release || echo "BUILD_ID=\"$tag\"" >> /etc/os-release
+		sed -i -E "s|^BUILD_ID=.*|BUILD_ID=\"$tag\"|" /etc/os-release
+	fi
+
+	if [ -f /etc/openwrt_release ]; then
+		sed -i -E "s|^DISTRIB_DESCRIPTION=.*|DISTRIB_DESCRIPTION='ImmortalWrt $VERSION'|" /etc/openwrt_release
+		sed -i -E "s|^DISTRIB_RELEASE=.*|DISTRIB_RELEASE='$VERSION'|" /etc/openwrt_release
+		sed -i -E "s|^DISTRIB_REVISION=.*|DISTRIB_REVISION='$tag'|" /etc/openwrt_release
+		grep -q '^DISTRIB_BUILD=' /etc/openwrt_release || echo "DISTRIB_BUILD='$tag'" >> /etc/openwrt_release
+		sed -i -E "s|^DISTRIB_BUILD=.*|DISTRIB_BUILD='$tag'|" /etc/openwrt_release
+	fi
+
+	# 3) banner 里展示构建版本（幂等）
+	if [ -f /etc/banner ]; then
+		grep -q '^构建版本:' /etc/banner 2>/dev/null || printf '\n构建版本: %s\n' "$tag" >> /etc/banner
+		sed -i -E "s|^构建版本: .*|构建版本: $tag|" /etc/banner
+	fi
+
+	# 4) quickstart：去掉「（内核：x）」后缀
+	local qs=/www/luci-static/quickstart/index.js
+	if [ -f "$qs" ] && grep -q '\\u5185\\u6838' "$qs" 2>/dev/null && [ -f /etc/g68/quickstart-index.js ]; then
+		cp /etc/g68/quickstart-index.js "$qs" 2>/dev/null && log "quickstart index.js 已恢复为无内核后缀版本"
+	fi
+
+	log "品牌信息完成：model=$MODEL version=ImmortalWrt $VERSION build=$tag"
+}
+
+stop() { :; }

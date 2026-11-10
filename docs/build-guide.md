@@ -715,6 +715,21 @@ rm -f /tmp/luci-indexcache*
 - 路由狗保留在菜单里，只是不再抢首页；
 - routerdog 重装/升级会覆盖该文件 → **重启一次**即自动修回（或手动执行上面两条）。
 
+### 7.9.3 品牌信息：设备型号 / 固件版本 / 构建版本号
+
+固件用 `/etc/init.d/g68-branding`（START=96，开机执行）统一：
+
+| 项 | 位置 | 值 |
+| --- | --- | --- |
+| 设备型号 | `/tmp/sysinfo/model`（ubus `system board` 的 model） | **NSY-G68** |
+| 固件版本 | `/etc/os-release`、`/etc/openwrt_release` | **ImmortalWrt 24.10**（去掉上游 `by:xxx`） |
+| 构建版本号 | `/etc/g68-build`（CI 写入）→ `DISTRIB_REVISION`、`DISTRIB_BUILD`、`/etc/banner` | 例 `g68-plus-2026.11.10-r34` |
+| quickstart 首页 | 覆盖 `/www/luci-static/quickstart/index.js`（备份在 `/etc/g68/`） | 去掉「（内核：x.y.z）」后缀 |
+
+- 构建信息由 CI 步骤「写入构建信息 /etc/g68-build」生成，**每版自动带 tag**；
+- quickstart 包升级会覆盖 `index.js` → 重启时脚本检测到「内核」后缀会自动恢复备份；
+- 手动查看：`cat /etc/g68-build`、`ubus call system board`。
+
 ### 7.10 修掉 TTYD 终端「已拒绝连接」（改 LAN IP 后必现）
 
 **症状**：改过 LAN 管理地址（或换网段）后，LuCI 里的 TTYD 终端打不开，浏览器报「已拒绝连接 / ERR_CONNECTION_REFUSED」。
