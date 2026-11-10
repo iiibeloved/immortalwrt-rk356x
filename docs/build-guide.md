@@ -680,7 +680,12 @@ LuCI 的菜单顺序由两类文件决定：
 - `/usr/share/luci/menu.d/*.json` 里 `admin/services/<app>` 的 `"order"`（JS 应用）；
 - `/usr/lib/lua/luci/controller/*.lua` 里 `entry({"admin","services","<app>"}, …, N)` 的 `N`（Lua 应用，如 PassWall/OpenClash）。
 
-固件用 **`/usr/bin/luci-services-order`** 统一重排（`/etc/init.d/luci-services-order` 每次开机执行）；另有 LuCI 界面：**系统 → 菜单排序**。
+排序能力由独立仓库 **`luci-app-menusort`** 提供（构建时 clone 进 `package/`）：
+
+- 命令：`/usr/bin/menusort`（支持 `forward` / `reverse` / `--list` / `--dry-run`）
+- 界面：**系统 → 菜单排序**（正向 / 反向 / 查看日志，执行后自动刷新）
+- 源码：<https://github.com/iiibeloved/luci-app-menusort>（可单独装 ipk，架构 `all`）
+- 固件里另有 `/etc/init.d/luci-services-order`（START=96）每次开机自动正向重排一次兜底。
 
 | 分组 | 规则 | 顺序 |
 | --- | --- | --- |

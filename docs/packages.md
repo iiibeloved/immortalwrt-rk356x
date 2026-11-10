@@ -17,7 +17,7 @@
 | `files/etc/init.d/g68-branding` | `ebec630360c41286ad23577ba6a1cc3feaf55a679c7a6a967044a48aed6e9c79` |
 | `files/etc/init.d/ha-config-path` | `e6e47aa65bbf02c94ce37593bae709cf8f8b3d374851e0512d4a3c1a80f30053` |
 | `files/etc/init.d/luci-default-page` | `c53bfbef482498dff038516fc6895503da7f49baac549c63ba2f43bb4c8f91e9` |
-| `files/etc/init.d/luci-services-order` | `87aed09cad7b2207dbbdb3f5bd120161ee3357ba134f5a855cc88b9c8cbd85e9` |
+| `files/etc/init.d/luci-services-order` | `93b695d4a02cc5078cf54a87365b6efda6d9c7c07e3bdddebd9228fdae0bdf10` |
 | `files/etc/init.d/nvme-automount` | `5cc0155dc8d620f549bfdfea8e4ffa83c4cadae735c70a7bcfd871562650614b` |
 | `files/etc/opkg/distfeeds.conf` | `d7ab59f54676a07d47413bff28beb87b592166a7b0e63b7c2730ec54be2721b7` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |
@@ -32,14 +32,10 @@
 | `files/etc/uci-defaults/99-set-lan-ip` | `f48add100eb91cd175351357022cf76dbb4a68318471e2695cb98eca333208cd` |
 | `files/usr/bin/firstboot-status` | `4cd5ea2efa5343d3afd0befd8bf88d66a98b09909998127620a341c61735de2f` |
 | `files/usr/bin/kspeeder-cache-gc` | `918d0aaeb6209a524d0f79c518db72a8c8df27d19f90378327a19198af489735` |
-| `files/usr/bin/luci-services-order` | `79114daff3a5a12811b062b8419049154024d42d33db49974616642604913cda` |
 | `files/usr/libexec/istorec/homeassistant.sh` | `38e3be3269f5e86383022481a8ddb6eaeee1c9bbbb7fe1efd498f4085134cff7` |
 | `files/usr/share/luci/menu.d/luci-app-ksgc.json` | `3aade120680e5a2343174fc078b2131b63b1771c684bafee1de624546630f048` |
-| `files/usr/share/luci/menu.d/luci-app-menusort.json` | `8ded582eedded425264f9c44071a6b6026ec64e8b971c626426b0bd7f46bf54a` |
 | `files/usr/share/rpcd/acl.d/luci-app-ksgc.json` | `f59b6f5d7877a7332bee4caca8da7eca83201aa3ee47083ec942daebe14a2344` |
-| `files/usr/share/rpcd/acl.d/luci-app-menusort.json` | `06454fb2c294f352f7be61bbf863d120676cdc8bbbca1c84070770e7d6b4b9a5` |
 | `files/www/luci-static/resources/view/ksgc/ksgc.js` | `87076d144659640aad9558e98efc7c51d754883e4ccf01ec32efd99dc9df8542` |
-| `files/www/luci-static/resources/view/menusort/menusort.js` | `bf2cb3132236b091ea52543e952fa58a3ac25fadd0b8b148bb51491ed923ad20` |
 
 ## 重点应用
 

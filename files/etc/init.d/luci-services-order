@@ -1,6 +1,7 @@
 #!/bin/sh /etc/rc.common
 # 开机把「服务」菜单按 英文A-Z → 中文拼音 重排（应用升级会重置 order）
+# 命令与页面由 luci-app-menusort 包提供（/usr/bin/menusort）
 START=96
 STOP=10
-start() { [ -x /usr/bin/luci-services-order ] && /usr/bin/luci-services-order; }
+start() { [ -x /usr/bin/menusort ] && /usr/bin/menusort >/dev/null 2>&1; }
 stop() { :; }

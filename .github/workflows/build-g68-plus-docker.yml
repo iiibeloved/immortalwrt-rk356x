@@ -89,6 +89,7 @@ env:
   # wolplus / rtbwmon / webdav2 等 iStoreOS 生态插件
   FEED_SMALL: "src-git small https://github.com/kenzok8/small-package.git;main"
   # 单包仓库 (以本地 package/ 方式引入, 不作为 feed 全量索引)
+  PKG_MENUSORT_URL: https://github.com/iiibeloved/luci-app-menusort
   PKG_PARTEXP_URL: https://github.com/sirpdboy/luci-app-partexp
   PKG_FILETRANSFER_URL: https://github.com/DustReliant/luci-app-filetransfer.git
 
@@ -266,6 +267,20 @@ jobs:
             echo "BUILD_VARIANT=${VARIANT:-full}"
           } > files/etc/g68-build
           cat files/etc/g68-build
+
+      - name: 引入 luci-app-menusort (独立仓库单包)
+        run: |
+          set -u
+          if git clone --depth 1 "$PKG_MENUSORT_URL" /tmp/menusort-src; then
+            mkdir -p package
+            # 该仓库本身就是 LuCI 包（根目录有 Makefile / root / htdocs）
+            cp -a /tmp/menusort-src/. package/luci-app-menusort/
+            rm -rf package/luci-app-menusort/.git package/luci-app-menusort/.github
+            echo "== luci-app-menusort 已放入 package/ (版本: $(grep -m1 '^PKG_VERSION' package/luci-app-menusort/Makefile | cut -d= -f2))"
+          else
+            echo "::warning::luci-app-menusort 拉取失败, 该包将被跳过"
+            rm -rf package/luci-app-menusort /tmp/menusort-src
+          fi
 
       - name: 按 variant 裁剪内置脚本/配置
         run: |
