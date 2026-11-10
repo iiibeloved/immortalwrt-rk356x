@@ -322,6 +322,20 @@ sudo rkdeveloptool rd
 | 要做 SD 启动卡 | **dd / balenaEtcher** 写卡 |
 | 系统起不来 / 全新 eMMC | **USB maskrom（RKDevTool 或 rkdeveloptool）** |
 
+## 4.7 两个构建变体：full / generic
+
+`workflow_dispatch` 新增输入 `variant`：
+
+| 值 | 产物 tag | 内容 |
+| --- | --- | --- |
+| `full`（默认） | `g68-plus-YYYY.MM.DD[-rN]` | 应用包 + **固件内置脚本/自动配置**（LAN 自动改、NVMe 自动挂载、HA 路径、docker 防火墙/镜像、KSpeeder 回收…） |
+| `generic` | `g68-plus-YYYY.MM.DD-generic` | 应用包 + 软件源配置；**不含任何内置脚本**（工作流在编译前删除 `files/etc/init.d`、`files/etc/uci-defaults`、`files/etc/config`、`files/usr/bin`、`files/usr/libexec`） |
+
+generic 的定位：**像新装系统一样**——分区、挂载、docker 数据目录、LAN 地址、防火墙、镜像加速全部由你用 uci/LuCI 手动配置。
+
+两者的**应用包完全相同**（约 565 包），差别只在「是否固化脚本/默认配置」。
+迁移到 generic 时只要遵守 [docs/invariants.md](invariants.md) 里的路径约定，容器与数据可无缝接上。
+
 ## 5. 刷机步骤（务必核对 sha256）
 
 ```bash

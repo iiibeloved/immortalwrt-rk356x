@@ -48,6 +48,14 @@ on:
         description: "rootfs_data 分区(可写 overlay: iStore/opkg 装包、docker 数据、配置)MB"
         required: true
         default: "4096"
+      variant:
+        description: "构建变体: full=带固件内置脚本; generic=纯应用+手动配置(不固化任何脚本)"
+        required: false
+        default: "full"
+        type: choice
+        options:
+          - full
+          - generic
       upload_artifacts:
         description: "上传固件 artifact"
         type: boolean
@@ -244,6 +252,20 @@ jobs:
       # ---------------------------------------------------------------------
       # 3. 配置: defconfig + 附加片段 + rootfs 大小, 再由 make defconfig 归一化
       # ---------------------------------------------------------------------
+      - name: 按 variant 裁剪内置脚本/配置
+        run: |
+          set -euo pipefail
+          echo "== variant: ${VARIANT:-full}"
+          if [ "${VARIANT:-full}" = "generic" ]; then
+            echo "generic 变体：移除全部固化脚本与自定义配置（只保留软件源配置）"
+            rm -rf files/etc/init.d files/etc/uci-defaults files/etc/config
+            rm -rf files/usr/bin files/usr/libexec
+            echo "--- 保留的 files/ 内容 ---"
+            find files -type f 2>/dev/null | sort || true
+          else
+            echo "full 变体：保留全部内置脚本与配置"
+          fi
+
       - name: 应用 defconfig 与附加配置
         run: |
           set -euo pipefail
@@ -555,7 +577,7 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.upload_artifacts != false }}
         uses: actions/upload-artifact@v4
         with:
-          name: immortalwrt-g68-plus-${{ github.run_number }}
+          name: immortalwrt-g68-plus-${{ github.run_number }}${{ (github.event.inputs.variant == 'generic') && '-generic' || '' }}
           path: output/*
           retention-days: 15
           if-no-files-found: warn
@@ -574,6 +596,9 @@ jobs:
           fi
           # tag: 默认按日期; 同一天已有同名 Release 时追加 -r<run_number>, 保证多次构建并存
           TAG="g68-plus-$(TZ=Asia/Shanghai date +%Y.%m.%d)"
+          if [ "${VARIANT:-full}" = "generic" ]; then
+            TAG="${TAG}-generic"
+          fi
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             TAG="${TAG}-r${GITHUB_RUN_NUMBER}"
           fi
@@ -587,6 +612,7 @@ jobs:
             echo "| --- | --- |"
             echo "| 构建 | [run #${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
             echo "| 提交 | \`${GITHUB_SHA:0:8}\` |"
+            echo "| 变体 | **${VARIANT:-full}** |"
             echo "| 内核 | Linux ${KVER:-6.6} |"
             echo "| 软件包 | ${PKGS} 个 |"
             echo "| 镜像 sha256 | \`${SHA}\` |"
@@ -601,6 +627,11 @@ jobs:
             echo ""
             echo "> 代理只是前置前缀，文件内容与 sha256 完全相同；任一链接下载后都用下面的 sha256sums 校验。"
             echo ""
+            if [ "${VARIANT:-full}" = "generic" ]; then
+              echo "> **generic 变体**：只集成应用包与软件源配置；**不含**任何固件内置脚本/自动配置。"
+              echo "> 分区、挂载、docker 数据目录、LAN 地址等全部需要你**手动配置**（见 docs/first-boot-checklist.md）。"
+              echo ""
+            fi
             echo "### 集成内容"
             echo ""
             echo "- iStoreOS 风格: luci-app-quickstart + quickstart, luci-app-store + taskd/luci-lib-taskd/luci-lib-xterm"

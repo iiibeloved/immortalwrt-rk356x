@@ -13,6 +13,7 @@
 Docker、DDNS、共享、分区工具齐全；**不做任何自动分区/格式化**，把有断电风险的磁盘操作交给你手动执行。
 
 - 构建：GitHub Actions 自动出包（每周六 02:00，或手动触发）
+- 两个变体：**full**（默认，带内置脚本/自动配置）与 **generic**（纯应用 + 全手动配置，release 名带 `-generic` 后缀）
 - 产物：`*.img.gz` + `sha256sums`，自动发布到 Release
 - 配置：冻结基线 + CI 指纹校验（改动会被拦下）
 
@@ -176,6 +177,7 @@ docker info | grep -i 'docker root dir'
 - [docs/first-boot-checklist.md](docs/first-boot-checklist.md)：刷机后完整操作流程（按重要程度）
 - [docs/build-guide.md](docs/build-guide.md)：构建/刷机/维护全教程（含 USB maskrom、dd、手动分区、附录）
 - [docs/packages.md](docs/packages.md)：固件包清单（约 565 包 + 基线指纹）
+- [docs/invariants.md](docs/invariants.md)：**部署约定与迁移手册**（哪些路径/名字必须保持一致、换盘/重刷后怎么恢复）
 - [docs/scripts/](docs/scripts/)：`bootstrap-remote.sh`、`setup-router.sh`、`docker-apps.sh`
 
 ## 10. 已知限制
