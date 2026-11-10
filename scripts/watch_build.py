@@ -155,7 +155,7 @@ def main():
         print("拿不到 run 信息"); return 2
 
     print(f"跟踪 run #{run['run_number']} ({run['head_sha'][:8]}) ...", flush=True)
-    deadline = time.time() + 6 * 3600
+    deadline = time.time() + 12 * 3600
     while run["status"] != "completed" and not a.no_wait and time.time() < deadline:
         time.sleep(a.interval)
         d, st = api(f"/repos/{OWNER}/{REPO}/actions/runs/{run['id']}")
