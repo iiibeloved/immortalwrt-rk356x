@@ -1,0 +1,43 @@
+#!/bin/sh
+# =============================================================================
+#  统一「服务」菜单排序：
+#    1) 英文名应用在前，按英文名字母序；
+#    2) 中文名应用在后，按拼音首字母（同首字母再按全拼顺序）；
+#    3) 子菜单（如 homeproxy/*、nlbw/*）不受影响。
+#
+#  做法：直接改写各 luci-app-*.json 里 admin/services/<app> 的 "order" 值。
+#  注意：package 升级会覆盖这些文件 —— 届时再执行一次本脚本即可：
+#        cp /rom/etc/uci-defaults/95-luci-services-order /etc/uci-defaults/ && reboot
+#        （或手动：/etc/uci-defaults/95-luci-services-order; rm -f /tmp/luci-indexcache*）
+# =============================================================================
+
+MD=/usr/share/luci/menu.d
+
+set_order() {   # $1=文件名  $2=menu path  $3=order
+	f="$MD/$1"; key="$2"; val="$3"
+	[ -f "$f" ] || return 0
+	awk -v k="\"$key\"" -v n="$val" '
+		index($0, k) { inblk = 1 }
+		inblk && /"order"/ { sub(/"order"[ \t]*:[ \t]*[0-9]+/, "\"order\": " n); inblk = 0 }
+		{ print }
+	' "$f" > "$f.tmp" 2>/dev/null && mv "$f.tmp" "$f"
+}
+
+# ---- 英文名（A-Z）----
+set_order luci-app-ddns-go.json   "admin/services/ddns-go"  10   # DDNS-Go
+set_order luci-app-homeproxy.json "admin/services/homeproxy" 20  # HomeProxy
+set_order luci-app-lucky.json     "admin/services/lucky"     30  # Lucky
+set_order luci-app-upnp.json      "admin/services/upnp"      40  # UPnP IGD & PCP
+
+# ---- 中文名（拼音首字母：d d h j j j w w）----
+set_order luci-app-nlbwmon.json     "admin/services/nlbw"        50   # 带宽监控 (d)
+set_order luci-app-ddns.json        "admin/services/ddns"        60   # 动态 DNS (d)
+set_order luci-app-ksgc.json        "admin/services/ksgc"        70   # 缓存回收 (h)
+set_order luci-app-emmc-health.json "admin/services/emmc-health" 80   # 健康检测 (j)
+set_order luci-app-lan-wake.json    "admin/services/lan-wake"    90   # 局域网设备唤醒 (j)
+set_order luci-app-lan-scanner.json "admin/services/lan-scanner" 100  # 局域网设备扫描 (j)
+set_order luci-app-ksmbd.json       "admin/services/ksmbd"       110  # 网络共享 (w)
+set_order luci-app-wol.json         "admin/services/wol"         120  # 网络唤醒 (w)
+
+rm -f /tmp/luci-indexcache* 2>/dev/null
+exit 0

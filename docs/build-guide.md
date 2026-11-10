@@ -673,6 +673,22 @@ docker info | grep -E 'Docker Root Dir|Storage Driver'
 
 > `nvme-automount` 早于 `dockerd`（99）启动，所以挂载先就绪、docker 再启动，顺序没问题。
 
+### 7.9.1 「服务」菜单排序（英文 A-Z → 中文拼音）
+
+LuCI 的菜单顺序由各 `luci-app-*.json` 里的 `"order"` 决定。固件用
+`/etc/uci-defaults/95-luci-services-order` 统一重排：
+
+| 分组 | 规则 | 示例 order |
+| --- | --- | --- |
+| 英文名应用 | 字母序 | `DDNS-Go 10`、`HomeProxy 20`、`Lucky 30`、`UPnP 40` |
+| 中文名应用 | 拼音首字母（同首字母按全拼） | `带宽监控 50`、`动态 DNS 60`、`缓存回收 70`、`健康检测 80`、`局域网设备唤醒 90`、`局域网设备扫描 100`、`网络共享 110`、`网络唤醒 120` |
+
+- 只改顶层 `admin/services/<app>`，**不动子菜单**（如 `homeproxy/*`）；
+- **package 升级会覆盖这些 json**，升级后重跑一次即可：
+  `cp /rom/etc/uci-defaults/95-luci-services-order /etc/uci-defaults/ && reboot`
+  或手动 `/etc/uci-defaults/95-luci-services-order; rm -f /tmp/luci-indexcache*`，浏览器 Ctrl+F5；
+- 新装应用如果没在映射表里，会按它自带的 `order` 插入（可自行补一行 `set_order`）。
+
 ### 7.10 修掉 TTYD 终端「已拒绝连接」（改 LAN IP 后必现）
 
 **症状**：改过 LAN 管理地址（或换网段）后，LuCI 里的 TTYD 终端打不开，浏览器报「已拒绝连接 / ERR_CONNECTION_REFUSED」。

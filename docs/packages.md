@@ -18,6 +18,7 @@
 | `files/etc/opkg/distfeeds.conf` | `d7ab59f54676a07d47413bff28beb87b592166a7b0e63b7c2730ec54be2721b7` |
 | `files/etc/opkg/keys/a56f16274c6d486b` | `1d1722a67025a160806e52a53ba630f249ea8c32a9c6031298d0445663cde4fa` |
 | `files/etc/opkg.conf` | `6e774833ba703e1bac7c09f7975fb69971e2bfed61ff263614acb5994f8b190d` |
+| `files/etc/uci-defaults/95-luci-services-order` | `6570b383a650886def15f40579fc2c91561ef3e49917fb320df38f4c60b913ef` |
 | `files/etc/uci-defaults/96-docker-firewall` | `60180ae404f012e24eb0bb1d3d6f76cd79bb86ebab1e91e97a332a7085935ef8` |
 | `files/etc/uci-defaults/97-dockerd-mirrors` | `2eb2b93cc3285e500e7ddfd34401a5e534270293b41919a222fd81bffded25c3` |
 | `files/etc/uci-defaults/98-docker-extras` | `7cad666b06385c05fd5a7a6d7755a1af6f9de5f7eb3a269bf9e1ba898c6b8497` |
