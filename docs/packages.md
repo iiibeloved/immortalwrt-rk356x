@@ -26,7 +26,7 @@
 | `files/etc/uci-defaults/99-opkg-istore` | `682b76bbad78f356a0aa8c0a294f4c44fd2b75b2210b93317c9b2afbea3847b0` |
 | `files/etc/uci-defaults/99-set-lan-ip` | `f48add100eb91cd175351357022cf76dbb4a68318471e2695cb98eca333208cd` |
 | `files/usr/bin/firstboot-status` | `4cd5ea2efa5343d3afd0befd8bf88d66a98b09909998127620a341c61735de2f` |
-| `files/usr/bin/kspeeder-cache-gc` | `e28e8370dfe85fe6830fccb186136d500bd0e8249f9f5adfa72647a9048e1aa8` |
+| `files/usr/bin/kspeeder-cache-gc` | `8c4fe32c564ce4565b318901b9c52e8f8abb471b5883aba3723c012a29453458` |
 | `files/usr/libexec/istorec/homeassistant.sh` | `38e3be3269f5e86383022481a8ddb6eaeee1c9bbbb7fe1efd498f4085134cff7` |
 
 ## 重点应用

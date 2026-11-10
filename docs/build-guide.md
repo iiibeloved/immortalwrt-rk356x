@@ -1617,11 +1617,11 @@ ks-cli cache clean            # 手动清空缓存（会影响下次拉取速度
 **固件内置的自动回收**：`/usr/bin/kspeeder-cache-gc` + 每日 04:15 的 cron
 
 ```sh
-KS_CACHE_LIMIT_MB=4096 /usr/bin/kspeeder-cache-gc   # 超过 4 GiB 才清（默认）
+KS_CACHE_LIMIT_MB=2048 /usr/bin/kspeeder-cache-gc   # 超过 2 GiB 才清（默认）
 tail -3 /etc/kspeeder-cache-gc.log                  # 看跳过/清理记录
 ```
 
-- 阈值可用环境变量覆盖（例如临时调成 1024 试一次）；
+- 阈值默认 **2 GiB**，可用环境变量覆盖（例如临时调成 1024 试一次）；
 - 未超阈值时只记录「跳过」，不会误删热缓存；
 - 想改时间：`vi /etc/crontabs/root` 后 `/etc/init.d/cron restart`。
 
